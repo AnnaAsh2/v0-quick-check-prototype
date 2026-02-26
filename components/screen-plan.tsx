@@ -5,28 +5,19 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Search, X, CheckCircle, BookOpen, Plus, ArrowRightLeft } from "lucide-react"
+import type { Course } from "@/lib/validation"
 
 /* ------------------------------------------------------------------ */
-/*  Course catalogue — worksheet courses + FINN 30103                  */
+/*  Course catalogue                                                   */
 /* ------------------------------------------------------------------ */
-
-interface Course {
-  code: string
-  name: string
-  hrs: number
-  cat: string
-}
 
 const catalogue: Course[] = [
-  // Current planned courses
   { code: "ECON 31303", name: "Intermediate Macroeconomics", hrs: 3, cat: "Economics Major" },
   { code: "ECON 47403", name: "Introduction to Econometrics", hrs: 4, cat: "Economics Major" },
   { code: "SEVI 30103", name: "Strategic Management", hrs: 3, cat: "Business Core" },
   { code: "ECON 43303", name: "Economics of Organizations", hrs: 3, cat: "Economics Major" },
   { code: "FINN 30603", name: "Investments", hrs: 3, cat: "Finance Minor" },
-  // The key swap suggestion
   { code: "FINN 30103", name: "Financial Analysis", hrs: 3, cat: "Finance Minor" },
-  // Other worksheet courses (not currently planned)
   { code: "ECON 47503", name: "Forecasting", hrs: 3, cat: "Economics Major" },
   { code: "ECON 30303", name: "Intermediate Microeconomics", hrs: 3, cat: "Economics Major" },
   { code: "ECON 34303", name: "Money & Banking", hrs: 3, cat: "Economics Major / Elective" },
@@ -45,18 +36,17 @@ const catalogue: Course[] = [
   { code: "COMM 12003", name: "Intro to Communication", hrs: 3, cat: "General Elective" },
 ]
 
-const defaultPlannedCodes = [
-  "ECON 31303",
-  "ECON 47403",
-  "SEVI 30103",
-  "ECON 43303",
-  "FINN 30603",
-]
+/* ------------------------------------------------------------------ */
+/*  Component                                                          */
+/* ------------------------------------------------------------------ */
 
-export function ScreenPlan({ onRunCheck }: { onRunCheck: () => void }) {
-  const [planned, setPlanned] = useState<Course[]>(
-    catalogue.filter((c) => defaultPlannedCodes.includes(c.code))
-  )
+interface Props {
+  planned: Course[]
+  setPlanned: React.Dispatch<React.SetStateAction<Course[]>>
+  onRunCheck: () => void
+}
+
+export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
   const [query, setQuery] = useState("")
   const [showResults, setShowResults] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
@@ -67,7 +57,6 @@ export function ScreenPlan({ onRunCheck }: { onRunCheck: () => void }) {
   const totalHrs = planned.reduce((acc, c) => acc + c.hrs, 0)
   const plannedCodes = new Set(planned.map((c) => c.code))
 
-  // Close search results on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
@@ -78,16 +67,16 @@ export function ScreenPlan({ onRunCheck }: { onRunCheck: () => void }) {
     return () => document.removeEventListener("mousedown", handleClick)
   }, [])
 
-  // Filter catalogue based on search query
-  const searchResults = query.trim().length > 0
-    ? catalogue.filter(
-        (c) =>
-          !plannedCodes.has(c.code) &&
-          (c.code.toLowerCase().includes(query.toLowerCase()) ||
-            c.name.toLowerCase().includes(query.toLowerCase()) ||
-            c.cat.toLowerCase().includes(query.toLowerCase()))
-      )
-    : catalogue.filter((c) => !plannedCodes.has(c.code))
+  const searchResults =
+    query.trim().length > 0
+      ? catalogue.filter(
+          (c) =>
+            !plannedCodes.has(c.code) &&
+            (c.code.toLowerCase().includes(query.toLowerCase()) ||
+              c.name.toLowerCase().includes(query.toLowerCase()) ||
+              c.cat.toLowerCase().includes(query.toLowerCase()))
+        )
+      : catalogue.filter((c) => !plannedCodes.has(c.code))
 
   const removeCourse = (code: string) => {
     setPlanned((prev) => prev.filter((c) => c.code !== code))
@@ -99,29 +88,32 @@ export function ScreenPlan({ onRunCheck }: { onRunCheck: () => void }) {
     setShowResults(false)
   }
 
-  /* Analysis animation */
   useEffect(() => {
     if (!analyzing) return
     const texts = [
       "Checking prerequisites...",
       "Evaluating degree requirements...",
+      "Validating credit-hour limits...",
       "Analyzing graduation timeline...",
     ]
     let i = 0
     setAnalyzeText(texts[0])
-    setAnalyzeProgress(15)
+    setAnalyzeProgress(10)
 
     const interval = setInterval(() => {
       i++
       if (i < texts.length) {
         setAnalyzeText(texts[i])
-        setAnalyzeProgress(15 + i * 35)
+        setAnalyzeProgress(10 + i * 25)
       } else {
         clearInterval(interval)
         setAnalyzeProgress(100)
-        setTimeout(() => onRunCheck(), 300)
+        setTimeout(() => {
+          setAnalyzing(false)
+          onRunCheck()
+        }, 300)
       }
-    }, 600)
+    }, 500)
 
     return () => clearInterval(interval)
   }, [analyzing, onRunCheck])
@@ -144,11 +136,11 @@ export function ScreenPlan({ onRunCheck }: { onRunCheck: () => void }) {
         <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
           Add the courses you{"'"}re thinking about for next semester. You can
           search, add, or remove courses. When you{"'"}re ready, run QuickCheck
-          to see if your plan works.
+          to validate your plan.
         </p>
       </div>
 
-      {/* Search with dropdown */}
+      {/* Search */}
       <div ref={searchRef} className="relative">
         <div className="relative">
           <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -164,7 +156,6 @@ export function ScreenPlan({ onRunCheck }: { onRunCheck: () => void }) {
           />
         </div>
 
-        {/* Search results dropdown */}
         {showResults && (
           <div className="absolute left-0 right-0 top-full z-30 mt-1.5 max-h-72 overflow-y-auto rounded-xl border bg-card shadow-xl">
             {searchResults.length === 0 ? (
@@ -179,19 +170,12 @@ export function ScreenPlan({ onRunCheck }: { onRunCheck: () => void }) {
                   className="flex w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-muted/50"
                 >
                   <Plus className="h-4 w-4 shrink-0 text-primary" />
-                  <Badge
-                    variant="secondary"
-                    className="shrink-0 font-mono text-xs"
-                  >
+                  <Badge variant="secondary" className="shrink-0 font-mono text-xs">
                     {c.code}
                   </Badge>
                   <div className="flex flex-1 flex-col">
-                    <span className="text-sm font-medium text-foreground">
-                      {c.name}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground">
-                      {c.cat}
-                    </span>
+                    <span className="text-sm font-medium text-foreground">{c.name}</span>
+                    <span className="text-[11px] text-muted-foreground">{c.cat}</span>
                   </div>
                   <span className="shrink-0 text-xs font-medium text-muted-foreground">
                     {c.hrs} hrs
@@ -203,7 +187,7 @@ export function ScreenPlan({ onRunCheck }: { onRunCheck: () => void }) {
         )}
       </div>
 
-      {/* Planned course list */}
+      {/* Planned list */}
       <div>
         <div className="mb-3 flex items-center justify-between">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -237,19 +221,12 @@ export function ScreenPlan({ onRunCheck }: { onRunCheck: () => void }) {
                 className="flex items-center justify-between rounded-xl border bg-card px-4 py-3.5 shadow-sm transition-all hover:shadow-md"
               >
                 <div className="flex items-center gap-3">
-                  <Badge
-                    variant="secondary"
-                    className="shrink-0 font-mono text-xs"
-                  >
+                  <Badge variant="secondary" className="shrink-0 font-mono text-xs">
                     {c.code}
                   </Badge>
                   <div className="flex flex-col">
-                    <span className="text-sm font-medium text-foreground">
-                      {c.name}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground">
-                      {c.cat}
-                    </span>
+                    <span className="text-sm font-medium text-foreground">{c.name}</span>
+                    <span className="text-[11px] text-muted-foreground">{c.cat}</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -270,7 +247,7 @@ export function ScreenPlan({ onRunCheck }: { onRunCheck: () => void }) {
         )}
       </div>
 
-      {/* Run button or analyzing state */}
+      {/* Run button / analysis */}
       {analyzing ? (
         <div className="flex flex-col items-center gap-4 rounded-2xl border bg-card px-8 py-10 text-center shadow-sm">
           <div className="h-2 w-56 overflow-hidden rounded-full bg-secondary">

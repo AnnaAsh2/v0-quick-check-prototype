@@ -9,10 +9,20 @@ import { ScreenResults } from "@/components/screen-results"
 import { ScreenReview } from "@/components/screen-review"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Check } from "lucide-react"
+import type { Course } from "@/lib/validation"
+
+const defaultPlanned: Course[] = [
+  { code: "ECON 31303", name: "Intermediate Macroeconomics", hrs: 3, cat: "Economics Major" },
+  { code: "ECON 47403", name: "Introduction to Econometrics", hrs: 4, cat: "Economics Major" },
+  { code: "SEVI 30103", name: "Strategic Management", hrs: 3, cat: "Business Core" },
+  { code: "ECON 43303", name: "Economics of Organizations", hrs: 3, cat: "Economics Major" },
+  { code: "FINN 30603", name: "Investments", hrs: 3, cat: "Finance Minor" },
+]
 
 export default function Home() {
   const [screen, setScreen] = useState(1)
   const [loading, setLoading] = useState(false)
+  const [planned, setPlanned] = useState<Course[]>(defaultPlanned)
 
   const goTo = (s: number) => setScreen(s)
 
@@ -76,14 +86,21 @@ export default function Home() {
           >
             {screen === 1 && <ScreenUpload onLoadSample={handleLoadSample} />}
             {screen === 2 && <ScreenProfile onNext={() => goTo(3)} />}
-            {screen === 3 && <ScreenPlan onRunCheck={() => goTo(4)} />}
+            {screen === 3 && (
+              <ScreenPlan
+                planned={planned}
+                setPlanned={setPlanned}
+                onRunCheck={() => goTo(4)}
+              />
+            )}
             {screen === 4 && (
               <ScreenResults
+                planned={planned}
                 onBack={() => goTo(3)}
                 onSubmit={() => goTo(5)}
               />
             )}
-            {screen === 5 && <ScreenReview />}
+            {screen === 5 && <ScreenReview planned={planned} />}
           </div>
         )}
       </main>

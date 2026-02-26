@@ -1,8 +1,8 @@
 "use client"
 
+import { useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
 import {
   CheckCircle2,
   AlertTriangle,
@@ -12,144 +12,11 @@ import {
   RefreshCw,
   Send,
   Clock,
-  TrendingUp,
+  Info,
+  Gauge,
 } from "lucide-react"
-
-/* ------------------------------------------------------------------ */
-/*  Course cards data                                                  */
-/* ------------------------------------------------------------------ */
-
-type CourseStatus = "pass" | "conditional" | "fail"
-
-interface CourseResult {
-  code: string
-  name: string
-  status: CourseStatus
-  countsToward: string
-  prereqs: string
-  prereqStatus: "met" | "conditional" | "notmet"
-  note: string
-  impact?: string
-}
-
-const courses: CourseResult[] = [
-  {
-    code: "ECON 31303",
-    name: "Intermediate Macroeconomics",
-    status: "pass",
-    countsToward: "Economics Major \u2014 Required (Business Economics concentration)",
-    prereqs: "Met \u2014 MATH 22003 (C+), ECON 21003 (A), ECON 22003 (A\u2212)",
-    prereqStatus: "met",
-    note: "Required for your concentration. On track.",
-  },
-  {
-    code: "ECON 47403",
-    name: "Introduction to Econometrics",
-    status: "pass",
-    countsToward: "Economics Major \u2014 Required (4 credit hours)",
-    prereqs: "Met \u2014 MATH 22003 (C+), BUSI 10303 (B)",
-    prereqStatus: "met",
-    note: "This is a 4-credit course \u2014 your semester total is 16 hours, not 15. Plan accordingly.",
-  },
-  {
-    code: "SEVI 30103",
-    name: "Strategic Management",
-    status: "pass",
-    countsToward: "Business Core \u2014 Required (capstone)",
-    prereqs:
-      "Conditional \u2014 Requires a \u201CC\u201D or better in ALL other business core courses. You are currently enrolled in MKTG 34303, which must be completed with a C or better this fall.",
-    prereqStatus: "conditional",
-    note: "As long as you pass MKTG 34303, you\u2019re clear. This is the right time to take it \u2014 it\u2019s your last business core requirement.",
-  },
-  {
-    code: "ECON 43303",
-    name: "Economics of Organizations",
-    status: "conditional",
-    countsToward: "Economics Major \u2014 Required",
-    prereqs:
-      "Conditional \u2014 Requires ECON 30303 (Intermediate Microeconomics), which you are taking this fall. Must complete with a \u201CC\u201D or better.",
-    prereqStatus: "conditional",
-    note: "Workload flag \u2014 you\u2019re planning 3 required economics courses plus a 4-credit econometrics course in one semester (16 hrs, heavy quantitative load). The 8-semester plan recommends deferring ECON 43303 to Fall 2027. Consider this carefully.",
-  },
-  {
-    code: "FINN 30603",
-    name: "Investments",
-    status: "fail",
-    countsToward: "Finance Minor requirement + Junior/Senior Business Elective",
-    prereqs:
-      "Not met. FINN 30603 requires FINN 20403 (\u2713 you have it) AND FINN 30103 Financial Analysis as a prerequisite or corequisite. You have not taken FINN 30103 and it is not in your plan.",
-    prereqStatus: "notmet",
-    note: "You cannot register for this course.",
-    impact:
-      "This also blocks your Finance minor \u2014 FINN 30103 is required for the minor anyway, so you need it regardless. If you want Investments in Fall 2027, take FINN 30103 this spring.",
-  },
-]
-
-/* ------------------------------------------------------------------ */
-/*  Degree progress data                                               */
-/* ------------------------------------------------------------------ */
-
-interface DegreeItem {
-  label: string
-  detail: string
-  value: number
-  total: number
-  done?: boolean
-  color?: string
-}
-
-const degreeProgress: DegreeItem[] = [
-  {
-    label: "Credit Hours",
-    detail: "After this semester: 65 \u2192 81 of 120 hours (68%)",
-    value: 81,
-    total: 120,
-    color: "bg-primary",
-  },
-  {
-    label: "Economics Major",
-    detail: "After this semester: 13 of 24 required major hours",
-    value: 13,
-    total: 24,
-    color: "bg-primary",
-  },
-  {
-    label: "Business Core",
-    detail: "Complete after this semester (SEVI 30103 finishes it)",
-    value: 21,
-    total: 21,
-    done: true,
-    color: "bg-emerald-500",
-  },
-  {
-    label: "Finance Minor",
-    detail: "0 of 15 hours \u2014 not started. FINN 30103 (required) is not in your plan.",
-    value: 0,
-    total: 15,
-    color: "bg-red-400",
-  },
-  {
-    label: "Jr/Sr Business Electives",
-    detail: "0 of 12 hours \u2014 finance minor courses can count toward this",
-    value: 0,
-    total: 12,
-    color: "bg-red-400",
-  },
-  {
-    label: "State Minimum Core",
-    detail: "16 of 20 hours \u2014 still need 1 Natural Science lecture + lab (4 hrs)",
-    value: 16,
-    total: 20,
-    color: "bg-amber-500",
-  },
-  {
-    label: "General Electives",
-    detail: "0 of 6 hours remaining",
-    value: 0,
-    total: 6,
-    color: "bg-red-400",
-  },
-]
+import { validatePlan } from "@/lib/validation"
+import type { Course, CourseStatus, PrereqStatus, LoadFlag } from "@/lib/validation"
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -182,7 +49,7 @@ function StatusIcon({ status }: { status: CourseStatus }) {
   }
 }
 
-function PrereqIcon({ s }: { s: "met" | "conditional" | "notmet" }) {
+function PrereqIcon({ s }: { s: PrereqStatus }) {
   switch (s) {
     case "met":
       return <span className="font-semibold text-emerald-600">{"\u2713"}</span>
@@ -193,17 +60,43 @@ function PrereqIcon({ s }: { s: "met" | "conditional" | "notmet" }) {
   }
 }
 
+function LoadFlagIcon({ flag }: { flag: LoadFlag }) {
+  switch (flag.type) {
+    case "info":
+      return <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+    case "warning":
+      return <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+    case "error":
+      return <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+  }
+}
+
+function loadFlagBg(flag: LoadFlag) {
+  switch (flag.type) {
+    case "info":
+      return "bg-primary/5 border-primary/15"
+    case "warning":
+      return "bg-amber-50 border-amber-200"
+    case "error":
+      return "bg-red-50 border-red-200"
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
 export function ScreenResults({
+  planned,
   onBack,
   onSubmit,
 }: {
+  planned: Course[]
   onBack: () => void
   onSubmit: () => void
 }) {
+  const result = useMemo(() => validatePlan(planned), [planned])
+
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-6 py-8">
       {/* ========== Overall assessment banner ========== */}
@@ -213,63 +106,97 @@ export function ScreenResults({
             QuickCheck Results
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Spring 2027 plan for Jordan Martinez — 5 courses, 16 credit hours
+            Spring 2027 plan for Jordan Martinez — {planned.length} courses,{" "}
+            {result.totalHrs} credit hours
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-4 px-6 py-4">
-          <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
-            <CheckCircle2 className="h-4 w-4" />
-            3 of 5 courses check out
-          </div>
-          <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
-            <XCircle className="h-4 w-4" />
-            1 prerequisite issue
-          </div>
-          <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-3 py-2 text-sm font-medium text-primary">
-            <Lightbulb className="h-4 w-4" />
-            1 suggestion
-          </div>
+        <div className="flex flex-wrap items-center gap-3 px-6 py-4">
+          {result.passCount > 0 && (
+            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
+              <CheckCircle2 className="h-4 w-4" />
+              {result.passCount} of {planned.length} courses check out
+            </div>
+          )}
+          {result.failCount > 0 && (
+            <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+              <XCircle className="h-4 w-4" />
+              {result.failCount} prerequisite issue{result.failCount > 1 ? "s" : ""}
+            </div>
+          )}
+          {result.conditionalCount > 0 && (
+            <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700">
+              <AlertTriangle className="h-4 w-4" />
+              {result.conditionalCount} conditional
+            </div>
+          )}
+          {result.suggestionCount > 0 && (
+            <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-3 py-2 text-sm font-medium text-primary">
+              <Lightbulb className="h-4 w-4" />
+              {result.suggestionCount} suggestion
+            </div>
+          )}
         </div>
       </div>
+
+      {/* ========== Credit-hour load flags ========== */}
+      {result.loadFlags.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <Gauge className="h-3.5 w-3.5" />
+            Course Load Assessment
+          </div>
+          {result.loadFlags.map((flag, i) => (
+            <div
+              key={i}
+              className={`flex items-start gap-3 rounded-xl border px-4 py-3 ${loadFlagBg(flag)}`}
+            >
+              <LoadFlagIcon flag={flag} />
+              <p className="text-sm text-foreground/80 leading-relaxed">
+                {flag.message}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ========== Course-by-course breakdown ========== */}
       <div className="flex flex-col gap-3">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Course-by-Course Breakdown
         </p>
-        {courses.map((c) => (
+        {result.courses.map((c) => (
           <div
             key={c.code}
             className={`rounded-xl border border-l-4 ${borderColor(c.status)} ${bgTint(c.status)} p-5 shadow-sm`}
           >
             <div className="flex items-start gap-3">
               <StatusIcon status={c.status} />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Badge
-                    variant="secondary"
-                    className="shrink-0 font-mono text-xs"
-                  >
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary" className="shrink-0 font-mono text-xs">
                     {c.code}
                   </Badge>
                   <span className="text-sm font-semibold text-foreground">
                     {c.name}
                   </span>
-                  {c.status === "pass" && c.prereqStatus === "conditional" && (
-                    <Badge className="border-amber-200 bg-amber-100 px-1.5 py-0 text-[10px] font-semibold text-amber-800">
-                      conditional
-                    </Badge>
-                  )}
-                  {c.status === "conditional" && (
-                    <Badge className="border-amber-200 bg-amber-100 px-1.5 py-0 text-[10px] font-semibold text-amber-800">
-                      workload flag
-                    </Badge>
-                  )}
-                  {c.status === "fail" && (
-                    <Badge className="border-red-200 bg-red-100 px-1.5 py-0 text-[10px] font-semibold text-red-700">
-                      cannot register
-                    </Badge>
-                  )}
+                  {c.badges.map((b) => {
+                    const cls =
+                      b === "cannot register"
+                        ? "border-red-200 bg-red-100 text-red-700"
+                        : b === "workload flag" || b === "conditional"
+                          ? "border-amber-200 bg-amber-100 text-amber-800"
+                          : b === "overload"
+                            ? "border-red-200 bg-red-100 text-red-700"
+                            : "border-primary/20 bg-primary/10 text-primary"
+                    return (
+                      <Badge
+                        key={b}
+                        className={`px-1.5 py-0 text-[10px] font-semibold ${cls}`}
+                      >
+                        {b}
+                      </Badge>
+                    )
+                  })}
                 </div>
                 <div className="mt-3 flex flex-col gap-2 text-sm leading-relaxed">
                   <p className="text-foreground/80">
@@ -309,8 +236,9 @@ export function ScreenResults({
         </p>
         <div className="rounded-xl border bg-card p-5 shadow-sm">
           <div className="flex flex-col gap-5">
-            {degreeProgress.map((d) => {
-              const pct = d.total > 0 ? Math.round((d.value / d.total) * 100) : 0
+            {result.degreeProgress.map((d) => {
+              const pct =
+                d.total > 0 ? Math.round((d.value / d.total) * 100) : 0
               return (
                 <div key={d.label}>
                   <div className="mb-1.5 flex items-center justify-between">
@@ -331,7 +259,7 @@ export function ScreenResults({
                   <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${d.color || "bg-primary"}`}
-                      style={{ width: `${pct}%` }}
+                      style={{ width: `${Math.min(pct, 100)}%` }}
                     />
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
@@ -353,48 +281,32 @@ export function ScreenResults({
           </p>
         </div>
         <p className="text-sm text-foreground/80 leading-relaxed">
-          You have 39 credit hours remaining after this semester across 3
-          semesters (Fall 2027, Spring 2028). That{"'"}s 13 hrs/semester — tight
-          but doable. However, you still need 15 hours of Finance minor courses
-          and haven{"'"}t started. Resolving the FINN 30103 issue this spring is
-          critical to staying on track for both the degree and the minor.
+          {result.timeline}
         </p>
       </div>
 
       {/* ========== Suggestion Box ========== */}
-      <div className="rounded-2xl border-2 border-primary/20 bg-primary/[0.04] p-6">
-        <div className="mb-3 flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/15">
-            <Lightbulb className="h-4 w-4 text-primary" />
+      {result.suggestion && (
+        <div className="rounded-2xl border-2 border-primary/20 bg-primary/[0.04] p-6">
+          <div className="mb-3 flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/15">
+              <Lightbulb className="h-4 w-4 text-primary" />
+            </div>
+            <p className="text-sm font-bold text-foreground">Suggestion</p>
           </div>
-          <p className="text-sm font-bold text-foreground">Suggestion</p>
+          <p className="text-sm font-semibold text-foreground">
+            {result.suggestion.title}
+          </p>
+          <div className="mt-3 flex flex-col gap-2.5 text-sm text-foreground/80 leading-relaxed">
+            {result.suggestion.body.map((para, i) => (
+              <p key={i}>{para}</p>
+            ))}
+          </div>
         </div>
-        <p className="text-sm font-semibold text-foreground">
-          Replace FINN 30603 with FINN 30103 (Financial Analysis) this semester.
-        </p>
-        <div className="mt-3 flex flex-col gap-2.5 text-sm text-foreground/80 leading-relaxed">
-          <p>
-            This is a no-brainer: FINN 30103 is required for your Finance minor,
-            it only requires FINN 20403 (which you{"'"}ve completed), and it
-            unlocks FINN 30603 (Investments), FINN 36003 (Corporate Finance),
-            and FINN 31003 (Financial Modeling) for Fall 2027. You haven{"'"}t
-            started your minor yet — 15 hours across 3 remaining semesters means
-            you need to begin now.
-          </p>
-          <p>
-            FINN 30103 also counts toward your Jr/Sr business elective
-            requirement (0 of 12 hrs), so it pulls double duty.
-          </p>
-          <p>
-            Separately, don{"'"}t forget you still need a Natural Science lecture
-            + lab (4 hrs) for State Minimum Core. Fitting a lab into senior year
-            is harder — consider taking it over the summer or in Fall 2027.
-          </p>
-        </div>
-      </div>
+      )}
 
       {/* ========== Bottom actions ========== */}
-      <div className="flex flex-col gap-4 border-t pt-6 pb-8 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 border-t pb-8 pt-6 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
           <Button
             variant="outline"
