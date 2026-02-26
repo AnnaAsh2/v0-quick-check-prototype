@@ -1036,6 +1036,288 @@ function computeTimeline(planned: Course[]): string {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Recommendation engine                                              */
+/*  Groups remaining requirements and suggests eligible courses        */
+/*  based on what Jordan has completed, what's in progress, and the    */
+/*  recommended 8-semester BSBA Business Economics sequence.           */
+/* ------------------------------------------------------------------ */
+
+export interface RecommendedCourse {
+  code: string
+  name: string
+  hrs: number
+  eligible: boolean            // prereqs met?
+  reason?: string              // why not eligible
+  priority: "critical" | "recommended" | "option"
+  note?: string
+}
+
+export interface RequirementGroup {
+  id: string
+  label: string
+  hoursNeeded: number
+  hoursCompleted: number
+  type: "single" | "choose"    // single = one specific course, choose = pick from list
+  courses: RecommendedCourse[]
+  description?: string
+}
+
+/**
+ * Build the guided recommendation groups for Spring 2027 (Jordan's situation).
+ * Already-planned courses (in `planned`) are excluded from suggestions.
+ */
+export function buildRecommendations(planned: Course[]): RequirementGroup[] {
+  const plannedCodes = new Set(planned.map(c => c.code))
+  const groups: RequirementGroup[] = []
+
+  // Helper: is a course already completed, IP, or planned?
+  const taken = (code: string) => completedCourses.has(code) || inProgressFall2026.has(code) || plannedCodes.has(code)
+  const eligible = (code: string): { ok: boolean; reason?: string } => {
+    const entry = catalog[code]
+    if (!entry) return { ok: true }
+    for (const p of entry.prereqs) {
+      if (!hasCompletedOrIP(p) && !plannedCodes.has(p)) {
+        return { ok: false, reason: `Requires ${p} (not completed)` }
+      }
+    }
+    if (entry.coreqs) {
+      for (const c of entry.coreqs) {
+        if (!hasCompletedOrIP(c) && !plannedCodes.has(c)) {
+          return { ok: false, reason: `Co-requisite ${c} not in plan` }
+        }
+      }
+    }
+    return { ok: true }
+  }
+
+  // ================================================================
+  // 1. BUSINESS CORE - SEVI 30103 is the only remaining course
+  // ================================================================
+  if (!taken("SEVI 30103")) {
+    const e = eligible("SEVI 30103")
+    groups.push({
+      id: "business-core",
+      label: "Business Core",
+      hoursNeeded: 3,
+      hoursCompleted: 18,
+      type: "single",
+      description: "SEVI 30103 is the capstone course and your last remaining Business Core requirement. The 8-semester plan places it in Spring Year 3.",
+      courses: [{
+        code: "SEVI 30103", name: "Strategic Management", hrs: 3,
+        eligible: e.ok, reason: e.reason,
+        priority: "critical",
+        note: "Capstone. Must complete all business core with C or better first. MKTG 34303 is in progress Fall 2026.",
+      }],
+    })
+  }
+
+  // ================================================================
+  // 2. ECONOMICS MAJOR - Required courses not yet taken
+  // ================================================================
+  const econRequired: { code: string; name: string; hrs: number; note: string }[] = [
+    { code: "ECON 31303", name: "Intermediate Macroeconomics", hrs: 3, note: "8-semester plan: Spring Year 3. Pairs well with ECON 30303 (in progress)." },
+    { code: "ECON 43303", name: "Economics of Organizations", hrs: 3, note: "8-semester plan: Fall Year 4. Requires ECON 30303 (in progress Fall 2026)." },
+    { code: "ECON 47403", name: "Introduction to Econometrics", hrs: 4, note: "8-semester plan: Spring Year 3. 4+1 option: take ECON 57403 Fall to count for this." },
+  ]
+  const econRequiredRemaining = econRequired.filter(c => !taken(c.code))
+  if (econRequiredRemaining.length > 0) {
+    groups.push({
+      id: "econ-major-required",
+      label: "Economics Major (Required)",
+      hoursNeeded: econRequiredRemaining.reduce((s, c) => s + c.hrs, 0),
+      hoursCompleted: 6, // ECON 30303 (3, IP) + ECON 34303 (3, IP)
+      type: econRequiredRemaining.length === 1 ? "single" : "choose",
+      description: "Business Economics concentration requires 24 hours. ECON 30303 and ECON 34303 are in progress. The 8-semester plan recommends 2 upper-level ECON courses per semester for Years 3-4.",
+      courses: econRequiredRemaining.map(c => {
+        const e = eligible(c.code)
+        return {
+          code: c.code, name: c.name, hrs: c.hrs,
+          eligible: e.ok, reason: e.reason,
+          priority: c.code === "ECON 31303" ? "critical" as const : "recommended" as const,
+          note: c.note,
+        }
+      }),
+    })
+  }
+
+  // ================================================================
+  // 3. ECONOMICS MAJOR - Elective courses (need ~6-9 hrs depending)
+  // ================================================================
+  const econElectiveOptions: { code: string; name: string; hrs: number; note?: string }[] = [
+    { code: "ECON 47503", name: "Forecasting", hrs: 3, note: "Alternative to ECON 47403. 4+1 plan: Spring take ECON 57503." },
+    { code: "ECON 47603", name: "Economic Analytics", hrs: 3, note: "Coreq with ECON 47403. Good pairing if taking Econometrics." },
+    { code: "ECON 44203", name: "Behavioral Economics", hrs: 3, note: "Requires ECON 30303 (in progress). Interesting elective." },
+    { code: "ECON 44303", name: "Experimental Economics", hrs: 3 },
+    { code: "ECON 35303", name: "Labor Economics", hrs: 3, note: "Also counts toward Social Issues requirement." },
+    { code: "ECON 31403", name: "Economics of Poverty & Inequality", hrs: 3 },
+    { code: "ECON 33303", name: "Public Economics", hrs: 3 },
+    { code: "ECON 46303", name: "International Trade", hrs: 3, note: "Required if pursuing Intl Econ concentration." },
+    { code: "ECON 46403", name: "Intl Macroeconomics & Finance", hrs: 3, note: "Required if pursuing Intl Econ concentration." },
+    { code: "ECON 38403", name: "Economics of the Developing World", hrs: 3 },
+    { code: "ECON 38503", name: "Emerging Markets", hrs: 3 },
+  ]
+  const econElecRemaining = econElectiveOptions.filter(c => !taken(c.code))
+  if (econElecRemaining.length > 0) {
+    groups.push({
+      id: "econ-major-elective",
+      label: "Economics Major (Electives)",
+      hoursNeeded: 9,
+      hoursCompleted: 3, // ECON 34303 IP counts
+      type: "choose",
+      description: "Choose from ECON 3000/4000-level courses. ECON 34303 (Money & Banking, in progress) counts toward this. Need approximately 6 more hours across remaining semesters.",
+      courses: econElecRemaining.map(c => {
+        const e = eligible(c.code)
+        return {
+          code: c.code, name: c.name, hrs: c.hrs,
+          eligible: e.ok, reason: e.reason,
+          priority: "option" as const,
+          note: c.note,
+        }
+      }),
+    })
+  }
+
+  // ================================================================
+  // 4. FINANCE MINOR (15 hours required, 0 completed)
+  // ================================================================
+  const finMinorCourses: { code: string; name: string; hrs: number; note?: string }[] = [
+    { code: "FINN 30103", name: "Financial Analysis", hrs: 3, note: "REQUIRED for Finance minor. Unlocks Investments, Corporate Finance, Financial Modeling, and Financial Data Analytics." },
+    { code: "FINN 30603", name: "Investments", hrs: 3, note: "Requires FINN 30103 as co-requisite. Key Finance minor course." },
+    { code: "FINN 31003", name: "Financial Modeling", hrs: 3, note: "Requires FINN 20403 only. Good early choice." },
+    { code: "FINN 36003", name: "Corporate Finance", hrs: 3, note: "Requires FINN 20403 + FINN 30103. Banking track." },
+    { code: "FINN 31303", name: "Commercial Banking", hrs: 3, note: "Requires FINN 20403 only. Banking track." },
+    { code: "FINN 37003", name: "International Finance", hrs: 3, note: "Also counts toward Intl Econ concentration." },
+    { code: "FINN 30003", name: "Personal Financial Management", hrs: 3, note: "No prerequisites. Insurance/RE track." },
+    { code: "FINN 36203", name: "Risk Management", hrs: 3, note: "Insurance/RE track." },
+  ]
+  const finMinorRemaining = finMinorCourses.filter(c => !taken(c.code))
+  if (finMinorRemaining.length > 0) {
+    groups.push({
+      id: "finance-minor",
+      label: "Finance Minor",
+      hoursNeeded: 15,
+      hoursCompleted: 0,
+      type: "choose",
+      description: "Requires 15 hours. FINN 30103 is required and must be taken first. You have 3 semesters remaining -- start now. The 8-semester plan recommends 2 FINN courses per semester starting Spring Year 3.",
+      courses: finMinorRemaining.map(c => {
+        const e = eligible(c.code)
+        return {
+          code: c.code, name: c.name, hrs: c.hrs,
+          eligible: e.ok, reason: e.reason,
+          priority: c.code === "FINN 30103" ? "critical" as const : "recommended" as const,
+          note: c.note,
+        }
+      }),
+    })
+  }
+
+  // ================================================================
+  // 5. JR/SR BUSINESS ELECTIVES (12 hours needed, 0 completed)
+  // ================================================================
+  const jrSrOptions: { code: string; name: string; hrs: number; note?: string }[] = [
+    { code: "FINN 30503", name: "Financial Markets & Institutions", hrs: 3 },
+    { code: "FINN 43203", name: "Financial Data Analytics I", hrs: 3, note: "Requires FINN 30103." },
+    { code: "ISYS 41903", name: "Business Analytics & Visualization", hrs: 3 },
+    { code: "MKTG 38303", name: "Digital Marketing", hrs: 3, note: "Requires MKTG 34303 (in progress)." },
+    { code: "BLAW 30303", name: "Commercial Law", hrs: 3 },
+    { code: "MGMT 42503", name: "Leadership", hrs: 3, note: "Requires MGMT 21003 (completed)." },
+    { code: "SEVI 39303", name: "Entrepreneurship & New Venture Dev", hrs: 3 },
+    { code: "SCMT 34403", name: "Transportation & Distribution Mgmt", hrs: 3 },
+  ]
+  const jrSrRemaining = jrSrOptions.filter(c => !taken(c.code))
+  if (jrSrRemaining.length > 0) {
+    groups.push({
+      id: "jrsr-electives",
+      label: "Jr/Sr Business Electives",
+      hoursNeeded: 12,
+      hoursCompleted: 0,
+      type: "choose",
+      description: "Any 3000 or 4000-level business course (ACCT, BLAW, ECON, FINN, ISYS, MGMT, MKTG, SCMT, SEVI, BUSI) except ECON 30503, ECON 30603, and MGMT 35603. Finance minor courses also count here.",
+      courses: jrSrRemaining.map(c => {
+        const e = eligible(c.code)
+        return {
+          code: c.code, name: c.name, hrs: c.hrs,
+          eligible: e.ok, reason: e.reason,
+          priority: "option" as const,
+          note: c.note,
+        }
+      }),
+    })
+  }
+
+  // ================================================================
+  // 6. STATE MINIMUM CORE - Remaining (Humanities, Natural Science)
+  // ================================================================
+  {
+    const stateMinOptions: { code: string; name: string; hrs: number; note?: string }[] = [
+      { code: "PHIL 21003", name: "Intro to Ethics", hrs: 3, note: "In progress Fall 2026. Fulfills Humanities." },
+      { code: "HIST 20003", name: "US History to 1877", hrs: 3, note: "In progress Fall 2026. Fulfills US History/Gov." },
+    ]
+    const remaining = stateMinOptions.filter(c => !taken(c.code))
+    // Natural science is the big remaining gap
+    const needsNatSci = true // Jordan still needs 2nd science lecture + lab
+    if (needsNatSci || remaining.length > 0) {
+      const courses: RecommendedCourse[] = []
+      if (needsNatSci) {
+        courses.push({
+          code: "SCI XXXX3", name: "Natural Science Lecture", hrs: 3,
+          eligible: true, priority: "recommended",
+          note: "Need 2nd science lecture. Options: BIOL, CHEM, PHYS, or GEOL (already took GEOL 11103).",
+        })
+        courses.push({
+          code: "SCI XXXX1", name: "Matching Science Lab", hrs: 1,
+          eligible: true, priority: "recommended",
+          note: "Must match the lecture. Total: 4 credit hours for lecture + lab.",
+        })
+      }
+      remaining.forEach(c => {
+        courses.push({
+          code: c.code, name: c.name, hrs: c.hrs,
+          eligible: true, priority: "option", note: c.note,
+        })
+      })
+      groups.push({
+        id: "state-min-core",
+        label: "State Minimum Core",
+        hoursNeeded: 4,
+        hoursCompleted: 16,
+        type: "choose",
+        description: "16 of 20 hours completed. Need Natural Science lecture + matching lab (4 hrs). PHIL 21003 and HIST 20003 are in progress Fall 2026.",
+        courses,
+      })
+    }
+  }
+
+  // ================================================================
+  // 7. GENERAL ELECTIVES (6 hours needed, 3 completed)
+  // ================================================================
+  {
+    const genElecOptions: { code: string; name: string; hrs: number; note?: string }[] = [
+      { code: "COMM 13003", name: "Interpersonal Communication", hrs: 3 },
+      { code: "PSYC 21003", name: "Abnormal Psychology", hrs: 3 },
+      { code: "SOCI 20003", name: "Intro to Sociology", hrs: 3 },
+    ]
+    const remaining = genElecOptions.filter(c => !taken(c.code))
+    if (remaining.length > 0) {
+      groups.push({
+        id: "gen-electives",
+        label: "General Electives",
+        hoursNeeded: 3,
+        hoursCompleted: 3,
+        type: "choose",
+        description: "3 of 6 hours completed (COMM 12003). Max 6 hours of business courses and 3 hours of PEAC or DANC courses. Can schedule for a lighter semester.",
+        courses: remaining.map(c => ({
+          code: c.code, name: c.name, hrs: c.hrs,
+          eligible: true, priority: "option" as const, note: c.note,
+        })),
+      })
+    }
+  }
+
+  return groups
+}
+
+/* ------------------------------------------------------------------ */
 /*  Main validation entry point                                        */
 /* ------------------------------------------------------------------ */
 
