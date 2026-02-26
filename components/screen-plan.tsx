@@ -12,28 +12,58 @@ import type { Course } from "@/lib/validation"
 /* ------------------------------------------------------------------ */
 
 const catalogue: Course[] = [
-  { code: "ECON 31303", name: "Intermediate Macroeconomics", hrs: 3, cat: "Economics Major" },
-  { code: "ECON 47403", name: "Introduction to Econometrics", hrs: 4, cat: "Economics Major" },
-  { code: "SEVI 30103", name: "Strategic Management", hrs: 3, cat: "Business Core" },
-  { code: "ECON 43303", name: "Economics of Organizations", hrs: 3, cat: "Economics Major" },
+  // ====== Planned defaults ======
+  { code: "ECON 31303", name: "Intermediate Macroeconomics", hrs: 3, cat: "Economics Major (Required)" },
+  { code: "ECON 47403", name: "Introduction to Econometrics", hrs: 4, cat: "Economics Major (Required)" },
+  { code: "SEVI 30103", name: "Strategic Management", hrs: 3, cat: "Business Core (Capstone)" },
+  { code: "ECON 43303", name: "Economics of Organizations", hrs: 3, cat: "Economics Major (Required)" },
   { code: "FINN 30603", name: "Investments", hrs: 3, cat: "Finance Minor" },
-  { code: "FINN 30103", name: "Financial Analysis", hrs: 3, cat: "Finance Minor" },
-  { code: "ECON 47503", name: "Forecasting", hrs: 3, cat: "Economics Major" },
-  { code: "ECON 30303", name: "Intermediate Microeconomics", hrs: 3, cat: "Economics Major" },
-  { code: "ECON 34303", name: "Money & Banking", hrs: 3, cat: "Economics Major / Elective" },
+  // ====== Key swap course ======
+  { code: "FINN 30103", name: "Financial Analysis", hrs: 3, cat: "Finance Minor (Required)" },
+  // ====== Economics electives ======
+  { code: "ECON 47503", name: "Forecasting", hrs: 3, cat: "Economics Major (Alt to 4743)" },
+  { code: "ECON 47603", name: "Economic Analytics", hrs: 3, cat: "Economics Major (Elective)" },
+  { code: "ECON 31403", name: "Economics of Poverty & Inequality", hrs: 3, cat: "ECON Elective" },
+  { code: "ECON 33303", name: "Public Economics", hrs: 3, cat: "ECON Elective" },
+  { code: "ECON 35303", name: "Labor Economics", hrs: 3, cat: "ECON Elective / Social Issues" },
+  { code: "ECON 44203", name: "Behavioral Economics", hrs: 3, cat: "ECON Elective" },
+  { code: "ECON 44303", name: "Experimental Economics", hrs: 3, cat: "ECON Elective" },
+  { code: "ECON 46303", name: "International Trade", hrs: 3, cat: "ECON Elective / Intl Econ" },
+  { code: "ECON 46403", name: "Intl Macroeconomics & Finance", hrs: 3, cat: "ECON Elective / Intl Econ" },
+  { code: "ECON 38403", name: "Economics of the Developing World", hrs: 3, cat: "ECON Elective / Social Issues" },
+  { code: "ECON 38503", name: "Emerging Markets", hrs: 3, cat: "ECON Elective / Social Issues" },
+  { code: "ECON 34303", name: "Money & Banking", hrs: 3, cat: "ECON Elective" },
+  // ====== Finance ======
+  { code: "FINN 31003", name: "Financial Modeling", hrs: 3, cat: "Finance Minor" },
+  { code: "FINN 36003", name: "Corporate Finance", hrs: 3, cat: "Finance Minor (Banking)" },
+  { code: "FINN 31303", name: "Commercial Banking", hrs: 3, cat: "Finance Minor (Banking)" },
+  { code: "FINN 30003", name: "Personal Financial Management", hrs: 3, cat: "Finance Minor (Ins/RE)" },
+  { code: "FINN 30503", name: "Financial Markets & Institutions", hrs: 3, cat: "Jr/Sr Business Elective" },
+  { code: "FINN 37003", name: "International Finance", hrs: 3, cat: "Finance Minor / Intl Econ" },
+  { code: "FINN 36203", name: "Risk Management", hrs: 3, cat: "Finance Minor (Ins/RE)" },
+  { code: "FINN 43203", name: "Financial Data Analytics I", hrs: 3, cat: "Jr/Sr Business Elective" },
+  // ====== Management ======
+  { code: "MGMT 42503", name: "Leadership", hrs: 3, cat: "Management Minor / Elective" },
+  { code: "MGMT 42603", name: "Org Change & Development", hrs: 3, cat: "Management Minor / Elective" },
+  { code: "MGMT 49403", name: "Talent Acquisition & Management", hrs: 3, cat: "Management Minor / Elective" },
+  // ====== Marketing ======
+  { code: "MKTG 35503", name: "Consumer Behavior", hrs: 3, cat: "Marketing Minor / Elective" },
+  { code: "MKTG 36303", name: "Marketing Research", hrs: 3, cat: "Marketing Minor / Elective" },
+  { code: "MKTG 38303", name: "Digital Marketing", hrs: 3, cat: "Jr/Sr Business Elective" },
+  // ====== Supply Chain ======
+  { code: "SCMT 34403", name: "Transportation & Distribution Mgmt", hrs: 3, cat: "Supply Chain Minor / Elective" },
+  { code: "SCMT 36103", name: "Procurement & Supply Mgmt", hrs: 3, cat: "Supply Chain Minor / Elective" },
+  // ====== ISYS ======
+  { code: "ISYS 41903", name: "Business Analytics & Visualization", hrs: 3, cat: "Jr/Sr Business Elective" },
+  // ====== SEVI ======
+  { code: "SEVI 39303", name: "Entrepreneurship & New Venture Dev", hrs: 3, cat: "Innovation Minor / Elective" },
+  { code: "SEVI 36703", name: "Social Entrepreneurship", hrs: 3, cat: "Innovation Minor / Elective" },
+  // ====== BLAW ======
+  { code: "BLAW 30303", name: "Commercial Law", hrs: 3, cat: "Jr/Sr Business Elective" },
+  // ====== Worksheet / Pre-Business (already completed, for reference) ======
+  { code: "ECON 30303", name: "Intermediate Microeconomics", hrs: 3, cat: "Economics Major (Required)" },
   { code: "FINN 20403", name: "Principles of Finance", hrs: 3, cat: "Business Core" },
   { code: "MKTG 34303", name: "Introduction to Marketing", hrs: 3, cat: "Business Core" },
-  { code: "BLAW 20003", name: "Legal Environment of Business", hrs: 3, cat: "Business Core" },
-  { code: "ISYS 21003", name: "Business Information Systems", hrs: 3, cat: "Business Core" },
-  { code: "SCMT 21003", name: "Integrated Supply Chain Management", hrs: 3, cat: "Business Core" },
-  { code: "MGMT 21003", name: "Managing People and Organizations", hrs: 3, cat: "Business Core" },
-  { code: "ACCT 20103", name: "Accounting I", hrs: 3, cat: "Pre-Business Core" },
-  { code: "ACCT 20203", name: "Accounting II", hrs: 3, cat: "Pre-Business Core" },
-  { code: "MATH 22003", name: "Survey of Calculus", hrs: 3, cat: "Pre-Business Core" },
-  { code: "SPCH 10003", name: "Public Speaking", hrs: 3, cat: "Pre-Business Core / State Min" },
-  { code: "ECON 21003", name: "Principles of Macroeconomics", hrs: 3, cat: "Pre-Business Core" },
-  { code: "ECON 22003", name: "Principles of Microeconomics", hrs: 3, cat: "Pre-Business Core" },
-  { code: "COMM 12003", name: "Intro to Communication", hrs: 3, cat: "General Elective" },
 ]
 
 /* ------------------------------------------------------------------ */
