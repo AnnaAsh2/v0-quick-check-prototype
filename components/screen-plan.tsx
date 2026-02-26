@@ -270,17 +270,6 @@ export function ScreenPlan({ onRunCheck }: { onRunCheck: () => void }) {
         )}
       </div>
 
-      {/* Tip callout */}
-      <div className="flex items-start gap-3 rounded-xl border border-primary/15 bg-primary/[0.04] px-4 py-3">
-        <ArrowRightLeft className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-        <div className="text-xs text-foreground/70 leading-relaxed">
-          <span className="font-semibold text-foreground">Tip:</span> Try
-          removing FINN 30603 and adding FINN 30103 (Financial Analysis) — search for
-          {"\""}FINN{"\""}  above. You can swap courses and re-run QuickCheck as many
-          times as you like.
-        </div>
-      </div>
-
       {/* Run button or analyzing state */}
       {analyzing ? (
         <div className="flex flex-col items-center gap-4 rounded-2xl border bg-card px-8 py-10 text-center shadow-sm">
