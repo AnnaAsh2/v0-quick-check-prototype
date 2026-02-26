@@ -7,8 +7,8 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
+  title: 'QuickCheck — Instant Schedule Sanity Check',
+  description: 'AI-powered course plan sanity checker for Walton College of Business advisors and students.',
   generator: 'v0.app',
   icons: {
     icon: [
