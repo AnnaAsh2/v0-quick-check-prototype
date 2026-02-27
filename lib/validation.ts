@@ -824,10 +824,15 @@ function validateCourse(
 function evaluateLoad(totalHrs: number): LoadFlag[] {
   const flags: LoadFlag[] = []
 
-  if (totalHrs < STANDARD_MIN) {
+  if (totalHrs > 0 && totalHrs < 9) {
     flags.push({
-      type: "info",
-      message: `You are planning ${totalHrs} credit hours, below the standard full-time minimum of ${STANDARD_MIN} hours. This may affect financial aid eligibility or graduation timeline. Summer terms allow up to 6 credit hours.`,
+      type: "error",
+      message: `You are planning only ${totalHrs} credit hours -- well below the full-time minimum. This will affect financial aid eligibility, could jeopardize enrollment status, and puts your Spring 2028 graduation timeline at serious risk.`,
+    })
+  } else if (totalHrs >= 9 && totalHrs < STANDARD_MIN) {
+    flags.push({
+      type: "warning",
+      message: `You are planning ${totalHrs} credit hours, below the standard ${STANDARD_MIN}-hour semester load. This may affect financial aid eligibility and could delay your graduation timeline. Consider adding a course or plan to make up hours in a future semester.`,
     })
   } else if (totalHrs <= STANDARD_MAX) {
     flags.push({
