@@ -327,6 +327,7 @@ export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
               plannedCodes={plannedCodes}
               onAdd={addFromRec}
               onAddPair={addPair}
+              onRemove={removeCourse}
             />
           ))}
         </div>
@@ -422,11 +423,13 @@ function RequirementGroupCard({
   plannedCodes,
   onAdd,
   onAddPair,
+  onRemove,
 }: {
   group: RequirementGroup
   plannedCodes: Set<string>
   onAdd: (rec: RecommendedCourse) => void
   onAddPair: (lecture: RecommendedCourse, lab: RecommendedCourse) => void
+  onRemove: (code: string) => void
 }) {
   const [expanded, setExpanded] = useState(
     group.id === "business-core" || group.id === "econ-major-required" || group.id === "finance-minor"
@@ -494,18 +497,29 @@ function RequirementGroupCard({
           {isScience && group.sciencePairs!.map((pair) => {
             const pairAdded = plannedCodes.has(pair.lecture.code) && plannedCodes.has(pair.lab.code)
             return (
-              <button
+              <div
                 key={pair.lecture.code}
-                onClick={() => { if (!pairAdded) onAddPair(pair.lecture, pair.lab) }}
-                className={`flex flex-col gap-2 rounded-lg border-2 px-4 py-3.5 text-left transition-all ${
+                className={`relative flex flex-col gap-2 rounded-lg border-2 px-4 py-3.5 text-left transition-all ${
                   pairAdded
                     ? "border-emerald-300 bg-emerald-50"
                     : pair.lecture.priority === "recommended"
-                      ? "border-primary/20 bg-primary/[0.03] hover:border-primary/40 hover:bg-primary/[0.06]"
-                      : "border-border bg-muted/20 hover:border-muted-foreground/20 hover:bg-muted/40"
+                      ? "border-primary/20 bg-primary/[0.03] cursor-pointer hover:border-primary/40 hover:bg-primary/[0.06]"
+                      : "border-border bg-muted/20 cursor-pointer hover:border-muted-foreground/20 hover:bg-muted/40"
                 }`}
+                onClick={() => { if (!pairAdded) onAddPair(pair.lecture, pair.lab) }}
+                role="button"
+                tabIndex={0}
               >
-                <div className="flex items-center gap-2">
+                {pairAdded && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onRemove(pair.lecture.code) }}
+                    className="absolute right-2.5 top-2.5 rounded-full p-1 text-emerald-500 transition-colors hover:bg-emerald-100 hover:text-emerald-700"
+                    aria-label={`Remove ${pair.lecture.code} and ${pair.lab.code}`}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                <div className="flex items-center gap-2 pr-6">
                   {pairAdded ? (
                     <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600" />
                   ) : (
@@ -528,12 +542,10 @@ function RequirementGroupCard({
                     {pair.lecture.hrs + pair.lab.hrs} hrs
                   </Badge>
                 </div>
-                {pair.lecture.note && (
-                  <p className={`pl-6 text-[11px] leading-relaxed ${pairAdded ? "text-emerald-600" : "text-muted-foreground"}`}>
-                    {pairAdded ? "Added to your schedule (lecture + lab)" : pair.lecture.note}
-                  </p>
-                )}
-              </button>
+                <p className={`pl-6 text-[11px] leading-relaxed ${pairAdded ? "text-emerald-600" : "text-muted-foreground"}`}>
+                  {pairAdded ? "Added to your schedule (lecture + lab)" : pair.lecture.note}
+                </p>
+              </div>
             )
           })}
 
@@ -545,16 +557,27 @@ function RequirementGroupCard({
               {critical.map(c => {
                 const added = plannedCodes.has(c.code)
                 return (
-                  <button
+                  <div
                     key={c.code}
                     onClick={() => { if (!added) onAdd(c) }}
-                    className={`flex flex-col gap-1.5 rounded-lg border-2 px-4 py-3.5 text-left transition-all ${
+                    role="button"
+                    tabIndex={0}
+                    className={`relative flex flex-col gap-1.5 rounded-lg border-2 px-4 py-3.5 text-left transition-all ${
                       added
                         ? "border-emerald-300 bg-emerald-50"
-                        : "border-primary/20 bg-primary/[0.04] hover:border-primary/40 hover:bg-primary/[0.08]"
+                        : "cursor-pointer border-primary/20 bg-primary/[0.04] hover:border-primary/40 hover:bg-primary/[0.08]"
                     }`}
                   >
-                    <div className="flex items-center gap-2">
+                    {added && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onRemove(c.code) }}
+                        className="absolute right-2.5 top-2.5 rounded-full p-1 text-emerald-500 transition-colors hover:bg-emerald-100 hover:text-emerald-700"
+                        aria-label={`Remove ${c.code}`}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    <div className="flex items-center gap-2 pr-6">
                       {added ? (
                         <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600" />
                       ) : (
@@ -568,12 +591,10 @@ function RequirementGroupCard({
                           : "border-primary/20 bg-primary/10 text-primary"
                       }`}>{c.hrs} hrs</Badge>
                     </div>
-                    {c.note && (
-                      <p className={`pl-6 text-[11px] leading-relaxed ${added ? "text-emerald-600" : "text-muted-foreground"}`}>
-                        {added ? "Added to your schedule" : c.note}
-                      </p>
-                    )}
-                  </button>
+                    <p className={`pl-6 text-[11px] leading-relaxed ${added ? "text-emerald-600" : "text-muted-foreground"}`}>
+                      {added ? "Added to your schedule" : c.note}
+                    </p>
+                  </div>
                 )
               })}
             </div>
@@ -591,16 +612,27 @@ function RequirementGroupCard({
                 {recommended.slice(0, 8).map(c => {
                   const added = plannedCodes.has(c.code)
                   return (
-                    <button
+                    <div
                       key={c.code}
                       onClick={() => { if (!added) onAdd(c) }}
-                      className={`flex flex-col gap-1 rounded-lg border px-3.5 py-3 text-left transition-all ${
+                      role="button"
+                      tabIndex={0}
+                      className={`relative flex flex-col gap-1 rounded-lg border px-3.5 py-3 text-left transition-all ${
                         added
                           ? "border-emerald-300 bg-emerald-50"
-                          : "bg-card hover:border-primary/30 hover:shadow-sm"
+                          : "cursor-pointer bg-card hover:border-primary/30 hover:shadow-sm"
                       }`}
                     >
-                      <div className="flex items-center gap-2">
+                      {added && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onRemove(c.code) }}
+                          className="absolute right-2 top-2 rounded-full p-1 text-emerald-500 transition-colors hover:bg-emerald-100 hover:text-emerald-700"
+                          aria-label={`Remove ${c.code}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                      <div className="flex items-center gap-2 pr-6">
                         {added ? (
                           <CheckCircle className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
                         ) : (
@@ -610,12 +642,10 @@ function RequirementGroupCard({
                         <span className={`text-xs ${added ? "text-emerald-700" : "text-foreground"}`}>{c.name}</span>
                         <span className={`ml-auto text-[10px] font-medium ${added ? "text-emerald-600" : "text-muted-foreground"}`}>{c.hrs} hrs</span>
                       </div>
-                      {c.note && (
-                        <p className={`pl-[1.375rem] text-[10px] leading-relaxed ${added ? "text-emerald-600" : "text-muted-foreground"}`}>
-                          {added ? "Added to your schedule" : c.note}
-                        </p>
-                      )}
-                    </button>
+                      <p className={`pl-[1.375rem] text-[10px] leading-relaxed ${added ? "text-emerald-600" : "text-muted-foreground"}`}>
+                        {added ? "Added to your schedule" : c.note}
+                      </p>
+                    </div>
                   )
                 })}
               </div>
@@ -634,16 +664,27 @@ function RequirementGroupCard({
                 {options.slice(0, 8).map(c => {
                   const added = plannedCodes.has(c.code)
                   return (
-                    <button
+                    <div
                       key={c.code}
                       onClick={() => { if (!added) onAdd(c) }}
-                      className={`flex flex-col gap-0.5 rounded-md border px-3 py-2 text-left transition-colors ${
+                      role="button"
+                      tabIndex={0}
+                      className={`relative flex flex-col gap-0.5 rounded-md border px-3 py-2 text-left transition-colors ${
                         added
                           ? "border-emerald-300 bg-emerald-50"
-                          : "bg-muted/30 hover:bg-muted/60"
+                          : "cursor-pointer bg-muted/30 hover:bg-muted/60"
                       }`}
                     >
-                      <div className="flex items-center gap-1.5">
+                      {added && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onRemove(c.code) }}
+                          className="absolute right-2 top-2 rounded-full p-1 text-emerald-500 transition-colors hover:bg-emerald-100 hover:text-emerald-700"
+                          aria-label={`Remove ${c.code}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                      <div className="flex items-center gap-1.5 pr-6">
                         {added ? (
                           <CheckCircle className="h-3 w-3 shrink-0 text-emerald-600" />
                         ) : (
@@ -658,7 +699,7 @@ function RequirementGroupCard({
                           {added ? "Added to your schedule" : c.note}
                         </p>
                       )}
-                    </button>
+                    </div>
                   )
                 })}
               </div>
