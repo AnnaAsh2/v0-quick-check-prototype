@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -14,9 +14,16 @@ import {
   Clock,
   Info,
   Gauge,
+  ChevronDown,
+  ChevronRight,
+  BookOpen,
+  Calendar,
+  ShieldAlert,
+  ShieldCheck,
+  Shield,
 } from "lucide-react"
 import { validatePlan } from "@/lib/validation"
-import type { Course, CourseStatus, PrereqStatus, LoadFlag } from "@/lib/validation"
+import type { Course, CourseStatus, PrereqStatus, LoadFlag, DegreeCourseEntry, SemesterPlan, SuggestionSeverity } from "@/lib/validation"
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -82,6 +89,70 @@ function loadFlagBg(flag: LoadFlag) {
   }
 }
 
+function courseStatusBadge(entry: DegreeCourseEntry) {
+  switch (entry.status) {
+    case "completed":
+      return (
+        <Badge className="border-emerald-200 bg-emerald-100 text-emerald-700 text-[10px] font-semibold px-1.5 py-0">
+          {entry.grade || "Done"}
+        </Badge>
+      )
+    case "in-progress":
+      return (
+        <Badge className="border-sky-200 bg-sky-100 text-sky-700 text-[10px] font-semibold px-1.5 py-0">
+          IP
+        </Badge>
+      )
+    case "planned":
+      return (
+        <Badge className="border-violet-200 bg-violet-100 text-violet-700 text-[10px] font-semibold px-1.5 py-0">
+          Planned
+        </Badge>
+      )
+    case "remaining":
+      return (
+        <Badge className="border-border bg-muted text-muted-foreground text-[10px] font-semibold px-1.5 py-0">
+          Needed
+        </Badge>
+      )
+  }
+}
+
+function severityStyles(severity: SuggestionSeverity) {
+  switch (severity) {
+    case "red":
+      return {
+        border: "border-red-300",
+        bg: "bg-red-50",
+        iconBg: "bg-red-100",
+        iconColor: "text-red-600",
+        titleColor: "text-red-900",
+        bodyColor: "text-red-800/80",
+        Icon: ShieldAlert,
+      }
+    case "yellow":
+      return {
+        border: "border-amber-300",
+        bg: "bg-amber-50",
+        iconBg: "bg-amber-100",
+        iconColor: "text-amber-600",
+        titleColor: "text-amber-900",
+        bodyColor: "text-amber-800/80",
+        Icon: Shield,
+      }
+    case "green":
+      return {
+        border: "border-emerald-300",
+        bg: "bg-emerald-50",
+        iconBg: "bg-emerald-100",
+        iconColor: "text-emerald-600",
+        titleColor: "text-emerald-900",
+        bodyColor: "text-emerald-800/80",
+        Icon: ShieldCheck,
+      }
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
@@ -135,6 +206,19 @@ export function ScreenResults({
               {result.suggestionCount} suggestion
             </div>
           )}
+        </div>
+      </div>
+
+      {/* ========== Degree Progress ========== */}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <BookOpen className="h-3.5 w-3.5" />
+          Degree Progress
+        </div>
+        <div className="flex flex-col gap-4">
+          {result.degreeProgress.map((d) => (
+            <DegreeProgressSection key={d.label} item={d} />
+          ))}
         </div>
       </div>
 
@@ -229,80 +313,25 @@ export function ScreenResults({
         ))}
       </div>
 
-      {/* ========== Degree Progress ========== */}
-      <div className="flex flex-col gap-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Degree Progress
-        </p>
-        <div className="rounded-xl border bg-card p-5 shadow-sm">
-          <div className="flex flex-col gap-5">
-            {result.degreeProgress.map((d) => {
-              const pct =
-                d.total > 0 ? Math.round((d.value / d.total) * 100) : 0
-              return (
-                <div key={d.label}>
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <span className="text-sm font-medium text-foreground">
-                      {d.label}
-                    </span>
-                    {d.done ? (
-                      <div className="flex items-center gap-1 text-xs font-semibold text-emerald-600">
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        Complete
-                      </div>
-                    ) : (
-                      <span className="text-xs font-medium text-muted-foreground">
-                        {d.value}/{d.total} ({pct}%)
-                      </span>
-                    )}
-                  </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${d.color || "bg-primary"}`}
-                      style={{ width: `${Math.min(pct, 100)}%` }}
-                    />
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                    {d.detail}
-                  </p>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </div>
-
       {/* ========== Graduation Timeline ========== */}
-      <div className="rounded-xl border bg-card p-5 shadow-sm">
-        <div className="mb-2 flex items-center gap-2">
-          <Clock className="h-4 w-4 text-muted-foreground" />
-          <p className="text-sm font-semibold text-foreground">
-            Graduation Timeline
-          </p>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <Calendar className="h-3.5 w-3.5" />
+          Graduation Timeline
         </div>
-        <p className="text-sm text-foreground/80 leading-relaxed">
-          {result.timeline}
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          Best-case semester-by-semester path to Spring 2028 graduation, with prerequisite sequencing and requirements factored in.
         </p>
+        <div className="flex flex-col gap-4">
+          {result.timeline.map((sem, i) => (
+            <SemesterBlock key={sem.label} semester={sem} isCurrent={i === 0} />
+          ))}
+        </div>
       </div>
 
       {/* ========== Suggestion Box ========== */}
       {result.suggestion && (
-        <div className="rounded-2xl border-2 border-primary/20 bg-primary/[0.04] p-6">
-          <div className="mb-3 flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/15">
-              <Lightbulb className="h-4 w-4 text-primary" />
-            </div>
-            <p className="text-sm font-bold text-foreground">Suggestion</p>
-          </div>
-          <p className="text-sm font-semibold text-foreground">
-            {result.suggestion.title}
-          </p>
-          <div className="mt-3 flex flex-col gap-2.5 text-sm text-foreground/80 leading-relaxed">
-            {result.suggestion.body.map((para, i) => (
-              <p key={i}>{para}</p>
-            ))}
-          </div>
-        </div>
+        <SuggestionBox suggestion={result.suggestion} />
       )}
 
       {/* ========== Bottom actions ========== */}
@@ -325,6 +354,188 @@ export function ScreenResults({
         <p className="text-xs text-muted-foreground">
           You can run as many scenarios as you want before submitting.
         </p>
+      </div>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  Degree Progress Section (collapsible with course list)             */
+/* ------------------------------------------------------------------ */
+
+function DegreeProgressSection({ item }: { item: { label: string; detail: string; value: number; total: number; done?: boolean; color?: string; courses?: DegreeCourseEntry[] } }) {
+  const [expanded, setExpanded] = useState(false)
+  const pct = item.total > 0 ? Math.round((item.value / item.total) * 100) : 0
+  const hasCourses = item.courses && item.courses.length > 0
+
+  return (
+    <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+      <button
+        onClick={() => hasCourses && setExpanded(!expanded)}
+        className={`flex w-full items-start gap-3 px-5 py-4 text-left ${hasCourses ? "cursor-pointer hover:bg-muted/30" : ""}`}
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-sm font-medium text-foreground">{item.label}</span>
+            {item.done ? (
+              <div className="flex items-center gap-1 text-xs font-semibold text-emerald-600">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Complete
+              </div>
+            ) : (
+              <span className="text-xs font-medium text-muted-foreground">
+                {item.value}/{item.total} ({pct}%)
+              </span>
+            )}
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${item.color || "bg-primary"}`}
+              style={{ width: `${Math.min(pct, 100)}%` }}
+            />
+          </div>
+          <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">{item.detail}</p>
+        </div>
+        {hasCourses && (
+          <div className="mt-1 shrink-0 text-muted-foreground">
+            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </div>
+        )}
+      </button>
+
+      {expanded && hasCourses && (
+        <div className="border-t bg-muted/20 px-5 py-3">
+          <div className="flex flex-col gap-1.5">
+            {item.courses!.map((course, idx) => (
+              <div key={`${course.code}-${idx}`} className="flex items-center gap-2 py-1">
+                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                  {course.status === "completed" && <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-500" />}
+                  {course.status === "in-progress" && <Clock className="h-3 w-3 shrink-0 text-sky-500" />}
+                  {course.status === "planned" && <ArrowRight className="h-3 w-3 shrink-0 text-violet-500" />}
+                  {course.status === "remaining" && <div className="h-3 w-3 shrink-0 rounded-full border-2 border-muted-foreground/30" />}
+                  <span className={`text-xs font-mono font-medium ${
+                    course.status === "remaining" ? "text-muted-foreground" : "text-foreground"
+                  }`}>
+                    {course.code}
+                  </span>
+                  <span className={`text-xs truncate ${
+                    course.status === "remaining" ? "text-muted-foreground" : "text-foreground/80"
+                  }`}>
+                    {course.name}
+                  </span>
+                </div>
+                <span className="text-[10px] text-muted-foreground shrink-0">{course.hrs}h</span>
+                {courseStatusBadge(course)}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  Semester Block (for graduation timeline)                           */
+/* ------------------------------------------------------------------ */
+
+function SemesterBlock({ semester, isCurrent }: { semester: SemesterPlan; isCurrent: boolean }) {
+  return (
+    <div className={`rounded-xl border shadow-sm overflow-hidden ${
+      isCurrent ? "border-primary/30 bg-primary/[0.02]" : "bg-card"
+    }`}>
+      <div className={`flex items-center justify-between px-5 py-3 border-b ${
+        isCurrent ? "bg-primary/[0.06]" : "bg-muted/40"
+      }`}>
+        <div className="flex items-center gap-2">
+          <Clock className={`h-4 w-4 ${isCurrent ? "text-primary" : "text-muted-foreground"}`} />
+          <span className={`text-sm font-semibold ${isCurrent ? "text-primary" : "text-foreground"}`}>
+            {semester.label}
+          </span>
+          {isCurrent && (
+            <Badge className="border-primary/20 bg-primary/10 text-primary text-[10px] px-1.5 py-0">
+              Current
+            </Badge>
+          )}
+        </div>
+        <span className="text-xs font-medium text-muted-foreground">
+          {semester.totalHrs} credit hours
+        </span>
+      </div>
+
+      <div className="px-5 py-3">
+        {semester.courses.length > 0 ? (
+          <div className="flex flex-col gap-1.5">
+            {semester.courses.map((course, idx) => (
+              <div key={`${course.code}-${idx}`} className="flex items-center gap-2 py-1">
+                <div className="h-1.5 w-1.5 rounded-full bg-foreground/40 shrink-0" />
+                <span className="text-xs font-mono font-medium text-foreground">{course.code}</span>
+                <span className="text-xs text-foreground/80 flex-1 truncate">{course.name}</span>
+                <span className="text-[10px] text-muted-foreground shrink-0">{course.hrs}h</span>
+                {course.note && (
+                  <span className="text-[10px] text-muted-foreground/60 hidden sm:block max-w-[140px] truncate" title={course.note}>
+                    {course.note}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground italic py-1">No additional courses projected for this semester.</p>
+        )}
+      </div>
+
+      {semester.flags.length > 0 && (
+        <div className="border-t px-5 py-3 flex flex-col gap-2">
+          {semester.flags.map((flag, i) => (
+            <div key={i} className={`flex items-start gap-2 rounded-lg px-3 py-2 text-xs ${
+              flag.type === "error" ? "bg-red-50 text-red-700" :
+              flag.type === "warning" ? "bg-amber-50 text-amber-700" :
+              "bg-primary/5 text-primary"
+            }`}>
+              {flag.type === "error" && <XCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />}
+              {flag.type === "warning" && <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />}
+              {flag.type === "info" && <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />}
+              <span className="leading-relaxed">{flag.message}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  Suggestion Box (color-coded)                                       */
+/* ------------------------------------------------------------------ */
+
+function SuggestionBox({ suggestion }: { suggestion: { title: string; body: string[]; severity: SuggestionSeverity } }) {
+  const s = severityStyles(suggestion.severity)
+
+  return (
+    <div className={`rounded-2xl border-2 ${s.border} ${s.bg} p-6`}>
+      <div className="mb-3 flex items-center gap-2">
+        <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${s.iconBg}`}>
+          <s.Icon className={`h-4 w-4 ${s.iconColor}`} />
+        </div>
+        <p className={`text-sm font-bold ${s.titleColor}`}>
+          {suggestion.severity === "red" ? "Action Required" : suggestion.severity === "yellow" ? "Heads Up" : "All Clear"}
+        </p>
+        <Badge className={`text-[10px] px-1.5 py-0 ${
+          suggestion.severity === "red" ? "border-red-200 bg-red-100 text-red-700" :
+          suggestion.severity === "yellow" ? "border-amber-200 bg-amber-100 text-amber-700" :
+          "border-emerald-200 bg-emerald-100 text-emerald-700"
+        }`}>
+          {suggestion.severity === "red" ? "Critical" : suggestion.severity === "yellow" ? "Advisory" : "On Track"}
+        </Badge>
+      </div>
+      <p className={`text-sm font-semibold ${s.titleColor}`}>
+        {suggestion.title}
+      </p>
+      <div className={`mt-3 flex flex-col gap-2.5 text-sm ${s.bodyColor} leading-relaxed`}>
+        {suggestion.body.map((para, i) => (
+          <p key={i}>{para}</p>
+        ))}
       </div>
     </div>
   )

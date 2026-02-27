@@ -32,6 +32,15 @@ export interface LoadFlag {
   message: string
 }
 
+export interface DegreeCourseEntry {
+  code: string
+  name: string
+  hrs: number
+  status: "completed" | "in-progress" | "planned" | "remaining"
+  grade?: string
+  note?: string
+}
+
 export interface DegreeItem {
   label: string
   detail: string
@@ -39,7 +48,17 @@ export interface DegreeItem {
   total: number
   done?: boolean
   color?: string
+  courses?: DegreeCourseEntry[]
 }
+
+export interface SemesterPlan {
+  label: string
+  courses: { code: string; name: string; hrs: number; note?: string }[]
+  totalHrs: number
+  flags: { type: "info" | "warning" | "error"; message: string }[]
+}
+
+export type SuggestionSeverity = "green" | "yellow" | "red"
 
 export interface ValidationResult {
   courses: CourseResult[]
@@ -50,8 +69,8 @@ export interface ValidationResult {
   conditionalCount: number
   failCount: number
   suggestionCount: number
-  suggestion: { title: string; body: string[] } | null
-  timeline: string
+  suggestion: { title: string; body: string[]; severity: SuggestionSeverity } | null
+  timeline: SemesterPlan[]
 }
 
 /* ------------------------------------------------------------------ */
@@ -839,43 +858,162 @@ function computeDegreeProgress(planned: Course[], courseResults: CourseResult[])
   const totalPlannedHrs = planned.reduce((s, c) => s + c.hrs, 0)
   const hrsAfter = STUDENT.hoursCompleted + STUDENT.hoursInProgress + totalPlannedHrs
 
-  // ECON major: completed IP (ECON 30303 = 3, ECON 34303 = 3) + planned upper ECON
-  const econMajorIPHrs = 6 // ECON 30303 + ECON 34303 in progress
-  const econMajorRequiredCodes = ["ECON 30303", "ECON 31303", "ECON 43303", "ECON 47403", "ECON 47503"]
-  const econElectivePrefixes = ["ECON"]
-  const econMajorPlannedHrs = planned.filter(c =>
-    c.code.startsWith("ECON") && parseInt(c.code.split(" ")[1]) >= 30000
-  ).reduce((s, c) => s + c.hrs, 0)
-  const econMajorTotalAfter = econMajorIPHrs + econMajorPlannedHrs
+  /* helper to build course entry */
+  const entry = (code: string, name: string, hrs: number, note?: string): DegreeCourseEntry => {
+    if (completedCourses.has(code)) return { code, name, hrs, status: "completed", grade: completedRecord[code] }
+    if (inProgressFall2026.has(code)) return { code, name, hrs, status: "in-progress", note: "Fall 2026" }
+    if (plannedCodes.has(code)) return { code, name, hrs, status: "planned", note: "Spring 2027" }
+    return { code, name, hrs, status: "remaining", note }
+  }
 
-  // Business core: 5 done (BLAW, ISYS, SCMT, MGMT, FINN) = 15 hrs + MKTG IP = 3 hrs = 18
-  const businessCoreDone = 18 // completed + in-progress
-  const hasSevi = plannedCodes.has("SEVI 30103")
-  const businessCoreAfter = hasSevi ? 21 : businessCoreDone
+  // ---- Business Core ----
+  const businessCoreCourses: DegreeCourseEntry[] = [
+    entry("BLAW 20003", "Legal Environment of Business", 3),
+    entry("ISYS 21003", "Business Information Systems", 3),
+    entry("SCMT 21003", "Integrated Supply Chain Mgmt", 3),
+    entry("MGMT 21003", "Managing People & Organizations", 3),
+    entry("FINN 20403", "Principles of Finance", 3),
+    entry("MKTG 34303", "Intro to Marketing", 3),
+    entry("SEVI 30103", "Strategic Management", 3),
+  ]
+  const bcCompleted = businessCoreCourses.filter(c => c.status === "completed" || c.status === "in-progress").reduce((s, c) => s + c.hrs, 0)
+  const bcPlanned = businessCoreCourses.filter(c => c.status === "planned").reduce((s, c) => s + c.hrs, 0)
+  const bcAfter = bcCompleted + bcPlanned
 
-  // Finance minor: FINN 30103 required + 4 more courses (15 hrs total)
-  const finMinorAllCodes = ["FINN 30103", "FINN 30603", "FINN 31003", "FINN 36003", "FINN 31303", "FINN 37003", "FINN 30003", "FINN 30503", "FINN 36203", "FINN 43203"]
-  const finMinorPlanned = planned.filter(c => finMinorAllCodes.includes(c.code)).reduce((s, c) => s + c.hrs, 0)
+  // ---- Economics Major ----
+  const econRequiredCourses: DegreeCourseEntry[] = [
+    entry("ECON 30303", "Microeconomic Theory", 3),
+    entry("ECON 31303", "Macroeconomic Theory", 3),
+    entry("ECON 43303", "Economics of Organizations", 3),
+    entry("ECON 47403", "Intro to Econometrics", 4, "or ECON 47503 Forecasting"),
+  ]
+  const econElecAllOptions = [
+    { code: "ECON 34303", name: "Money & Banking", hrs: 3 },
+    { code: "ECON 47603", name: "Economic Analytics", hrs: 3 },
+    { code: "ECON 44203", name: "Behavioral Economics", hrs: 3 },
+    { code: "ECON 44303", name: "Experimental Economics", hrs: 3 },
+    { code: "ECON 35303", name: "Labor Economics", hrs: 3 },
+    { code: "ECON 31403", name: "Econ of Poverty & Inequality", hrs: 3 },
+    { code: "ECON 33303", name: "Public Economics", hrs: 3 },
+    { code: "ECON 46303", name: "International Trade", hrs: 3 },
+    { code: "ECON 46403", name: "Intl Macro & Finance", hrs: 3 },
+    { code: "ECON 38403", name: "Econ of Developing World", hrs: 3 },
+    { code: "ECON 38503", name: "Emerging Markets", hrs: 3 },
+    { code: "ECON 47503", name: "Forecasting", hrs: 3 },
+  ]
+  const econElecCourses: DegreeCourseEntry[] = econElecAllOptions
+    .filter(c => completedCourses.has(c.code) || inProgressFall2026.has(c.code) || plannedCodes.has(c.code))
+    .map(c => entry(c.code, c.name, c.hrs))
+  // add placeholders for remaining elective slots
+  const econElecHrsDone = econElecCourses.reduce((s, c) => s + c.hrs, 0)
+  const econElecNeeded = Math.max(0, 9 - econElecHrsDone)
+  for (let i = 0; i < Math.ceil(econElecNeeded / 3); i++) {
+    econElecCourses.push({ code: `ECON Elective ${i + 1}`, name: "ECON 3000/4000-level", hrs: 3, status: "remaining", note: "Choose from ECON elective options" })
+  }
 
-  // Jr/Sr business electives
+  const econAllCourses = [...econRequiredCourses, ...econElecCourses]
+  const econDone = econAllCourses.filter(c => c.status === "completed" || c.status === "in-progress").reduce((s, c) => s + c.hrs, 0)
+  const econPlanned = econAllCourses.filter(c => c.status === "planned").reduce((s, c) => s + c.hrs, 0)
+
+  // ---- Finance Minor ----
+  const finRequiredCodes = [
+    { code: "FINN 30103", name: "Financial Analysis", hrs: 3 },
+  ]
+  const finElecOptions = [
+    { code: "FINN 30603", name: "Investments", hrs: 3 },
+    { code: "FINN 31003", name: "Financial Modeling", hrs: 3 },
+    { code: "FINN 36003", name: "Corporate Finance", hrs: 3 },
+    { code: "FINN 31303", name: "Commercial Banking", hrs: 3 },
+    { code: "FINN 37003", name: "International Finance", hrs: 3 },
+    { code: "FINN 30003", name: "Personal Financial Mgmt", hrs: 3 },
+    { code: "FINN 36203", name: "Risk Management", hrs: 3 },
+  ]
+  const finCourses: DegreeCourseEntry[] = [
+    ...finRequiredCodes.map(c => entry(c.code, c.name, c.hrs)),
+    ...finElecOptions
+      .filter(c => completedCourses.has(c.code) || inProgressFall2026.has(c.code) || plannedCodes.has(c.code))
+      .map(c => entry(c.code, c.name, c.hrs)),
+  ]
+  const finDone = finCourses.filter(c => c.status === "completed" || c.status === "in-progress" || c.status === "planned").reduce((s, c) => s + c.hrs, 0)
+  const finSlotsNeeded = Math.max(0, Math.ceil((15 - finDone) / 3))
+  for (let i = 0; i < finSlotsNeeded; i++) {
+    finCourses.push({ code: `FINN Elective ${i + 1}`, name: "Finance minor elective", hrs: 3, status: "remaining", note: "Choose from FINN options" })
+  }
+  const finMinorHrs = finCourses.filter(c => c.status === "completed" || c.status === "in-progress" || c.status === "planned").reduce((s, c) => s + c.hrs, 0)
+
+  // ---- Jr/Sr Business Electives ----
   const majorOrCoreCodes = new Set([
     "ECON 30303", "ECON 31303", "ECON 47403", "ECON 43303", "ECON 47503",
     "SEVI 30103", "MKTG 34303",
   ])
   const jrSrPrefixes = ["ACCT", "BLAW", "ECON", "FINN", "ISYS", "MGMT", "MKTG", "SCMT", "SEVI", "BUSI"]
-  const jrSrElectiveHrs = planned.filter(c => {
-    const num = parseInt(c.code.split(" ")[1])
-    const prefix = c.code.split(" ")[0]
-    return num >= 30000 && jrSrPrefixes.includes(prefix) &&
-      !majorOrCoreCodes.has(c.code) &&
-      !["ECON 30503", "ECON 30603", "MGMT 35603"].includes(c.code)
-  }).reduce((s, c) => s + c.hrs, 0)
+  const jrSrExcluded = new Set(["ECON 30503", "ECON 30603", "MGMT 35603"])
+  const jrSrCourses: DegreeCourseEntry[] = planned
+    .filter(c => {
+      const num = parseInt(c.code.split(" ")[1])
+      const prefix = c.code.split(" ")[0]
+      return num >= 30000 && jrSrPrefixes.includes(prefix) &&
+        !majorOrCoreCodes.has(c.code) && !jrSrExcluded.has(c.code)
+    })
+    .map(c => entry(c.code, c.name, c.hrs))
+  const jrSrHrs = jrSrCourses.reduce((s, c) => s + c.hrs, 0)
+  const jrSrSlotsNeeded = Math.max(0, Math.ceil((12 - jrSrHrs) / 3))
+  for (let i = 0; i < jrSrSlotsNeeded; i++) {
+    jrSrCourses.push({ code: `Jr/Sr Elective ${i + 1}`, name: "3000/4000-level business course", hrs: 3, status: "remaining", note: "Finance minor courses count here" })
+  }
 
-  // State min core: 16 of 20 done (need natural science 4 hrs)
-  const stateMinAfter = 16
+  // ---- State Minimum Core ----
+  const stateMinCourses: DegreeCourseEntry[] = [
+    entry("GEOL 11103", "Physical Geology", 3),
+    entry("GEOL 11101", "Physical Geology Lab", 1),
+    entry("PSYC 20003", "General Psychology", 3),
+    entry("ARHS 10003", "Art History Survey", 3),
+    entry("PHIL 21003", "Intro to Philosophy", 3),
+    entry("HIST 20003", "US History", 3),
+  ]
+  // Science pair
+  const sciCodes = ["ASTR 10003", "ASTR 10001", "ENSC 10003", "ENSC 10001", "PHYS 10103", "PHYS 10101"]
+  const sciNames: Record<string, string> = {
+    "ASTR 10003": "Survey of Astronomy", "ASTR 10001": "Astronomy Lab",
+    "ENSC 10003": "Intro to Environmental Science", "ENSC 10001": "Environmental Science Lab",
+    "PHYS 10103": "Physics in the Modern World", "PHYS 10101": "Physics Modern World Lab",
+  }
+  const sciHrs: Record<string, number> = {
+    "ASTR 10003": 3, "ASTR 10001": 1, "ENSC 10003": 3, "ENSC 10001": 1, "PHYS 10103": 3, "PHYS 10101": 1,
+  }
+  let sciPlanned = false
+  for (const sc of sciCodes) {
+    if (plannedCodes.has(sc)) {
+      stateMinCourses.push(entry(sc, sciNames[sc], sciHrs[sc]))
+      sciPlanned = true
+    }
+  }
+  if (!sciPlanned) {
+    stateMinCourses.push({ code: "Science Lecture", name: "Natural Science lecture", hrs: 3, status: "remaining", note: "Choose: Astronomy, Enviro Sci, or Physics" })
+    stateMinCourses.push({ code: "Science Lab", name: "Natural Science lab", hrs: 1, status: "remaining", note: "Matching lab for lecture" })
+  }
+  const stateMinDone = stateMinCourses.filter(c => c.status === "completed" || c.status === "in-progress").reduce((s, c) => s + c.hrs, 0)
+  const stateMinPlanned = stateMinCourses.filter(c => c.status === "planned").reduce((s, c) => s + c.hrs, 0)
 
-  // General electives: 3 of 6 done (COMM 12003)
-  const genElectivesDone = 3
+  // ---- General Electives ----
+  const genElecCourses: DegreeCourseEntry[] = [
+    entry("COMM 12003", "Intro to Communication", 3),
+  ]
+  const genElecAllOptions = [
+    { code: "COMM 13003", name: "Interpersonal Communication", hrs: 3 },
+    { code: "PSYC 21003", name: "Abnormal Psychology", hrs: 3 },
+    { code: "SOCI 20003", name: "Intro to Sociology", hrs: 3 },
+    { code: "PHIL 32003", name: "Business Ethics", hrs: 3 },
+    { code: "GEOS 10003", name: "World Regional Geography", hrs: 3 },
+    { code: "ANTH 10003", name: "Intro to Anthropology", hrs: 3 },
+  ]
+  for (const c of genElecAllOptions) {
+    if (plannedCodes.has(c.code)) genElecCourses.push(entry(c.code, c.name, c.hrs))
+  }
+  const genDone = genElecCourses.filter(c => c.status === "completed" || c.status === "in-progress" || c.status === "planned").reduce((s, c) => s + c.hrs, 0)
+  if (genDone < 6) {
+    genElecCourses.push({ code: "Gen Elective", name: "General elective", hrs: 3, status: "remaining", note: "Any elective course" })
+  }
 
   return [
     {
@@ -884,43 +1022,52 @@ function computeDegreeProgress(planned: Course[], courseResults: CourseResult[])
       value: hrsAfter, total: 120, color: "bg-primary",
     },
     {
-      label: "Economics Major (24 hrs)",
-      detail: `IP: ${econMajorIPHrs} hrs + Planned: ${econMajorPlannedHrs} hrs = ${econMajorTotalAfter} of 24 required`,
-      value: econMajorTotalAfter, total: 24, color: econMajorTotalAfter >= 18 ? "bg-primary" : "bg-amber-500",
+      label: "Business Core (21 hrs)",
+      detail: bcAfter >= 21
+        ? "Complete after this semester -- SEVI 30103 is the final course."
+        : `${bcCompleted} of 21 hrs -- SEVI 30103 (Strategic Management) still needed`,
+      value: bcAfter, total: 21,
+      done: bcAfter >= 21, color: bcAfter >= 21 ? "bg-emerald-500" : "bg-amber-500",
+      courses: businessCoreCourses,
     },
     {
-      label: "Business Core (21 hrs)",
-      detail: hasSevi
-        ? "Complete after this semester \u2014 SEVI 30103 is the final course."
-        : `${businessCoreDone} of 21 hrs \u2014 SEVI 30103 (Strategic Management) still needed`,
-      value: businessCoreAfter, total: 21,
-      done: businessCoreAfter >= 21, color: businessCoreAfter >= 21 ? "bg-emerald-500" : "bg-amber-500",
+      label: "Economics Major (24 hrs)",
+      detail: `In Progress: ${econDone} hrs + Planned: ${econPlanned} hrs = ${econDone + econPlanned} of 24 required`,
+      value: econDone + econPlanned, total: 24,
+      color: (econDone + econPlanned) >= 18 ? "bg-primary" : "bg-amber-500",
+      courses: econAllCourses,
     },
     {
       label: "Finance Minor (15 hrs)",
-      detail: finMinorPlanned > 0
-        ? `${finMinorPlanned} hrs planned this semester \u2014 getting started`
-        : "0 of 15 hrs \u2014 not started. FINN 30103 (required) is not in your plan.",
-      value: finMinorPlanned, total: 15,
-      color: finMinorPlanned > 0 ? "bg-amber-500" : "bg-red-400",
+      detail: finMinorHrs > 0
+        ? `${finMinorHrs} hrs planned -- getting started`
+        : "0 of 15 hrs -- not started. FINN 30103 (required) is not in your plan.",
+      value: finMinorHrs, total: 15,
+      color: finMinorHrs > 0 ? "bg-amber-500" : "bg-red-400",
+      courses: finCourses,
     },
     {
       label: "Jr/Sr Business Electives (12 hrs)",
-      detail: jrSrElectiveHrs > 0
-        ? `${jrSrElectiveHrs} hrs this semester \u2014 finance minor courses count here too`
-        : "0 of 12 hrs \u2014 finance minor courses can count toward this",
-      value: jrSrElectiveHrs, total: 12,
-      color: jrSrElectiveHrs > 0 ? "bg-amber-500" : "bg-red-400",
+      detail: jrSrHrs > 0
+        ? `${jrSrHrs} hrs this semester -- finance minor courses count here too`
+        : "0 of 12 hrs -- finance minor courses can count toward this",
+      value: jrSrHrs, total: 12,
+      color: jrSrHrs > 0 ? "bg-amber-500" : "bg-red-400",
+      courses: jrSrCourses,
     },
     {
       label: "State Minimum Core (20 hrs)",
-      detail: `${stateMinAfter} of 20 hrs \u2014 still need Natural Science lecture + lab (4 hrs)`,
-      value: stateMinAfter, total: 20, color: "bg-amber-500",
+      detail: `${stateMinDone + stateMinPlanned} of 20 hrs${stateMinPlanned === 0 ? " -- still need Natural Science lecture + lab (4 hrs)" : ""}`,
+      value: stateMinDone + stateMinPlanned, total: 20,
+      color: (stateMinDone + stateMinPlanned) >= 20 ? "bg-emerald-500" : "bg-amber-500",
+      courses: stateMinCourses,
     },
     {
       label: "General Electives (6 hrs)",
-      detail: `${genElectivesDone} of 6 hrs completed (COMM 12003). ${6 - genElectivesDone} remaining.`,
-      value: genElectivesDone, total: 6, color: "bg-amber-500",
+      detail: `${genDone} of 6 hrs. ${Math.max(0, 6 - genDone)} remaining.`,
+      value: genDone, total: 6,
+      color: genDone >= 6 ? "bg-emerald-500" : "bg-amber-500",
+      courses: genElecCourses,
     },
   ]
 }
@@ -932,7 +1079,10 @@ function computeDegreeProgress(planned: Course[], courseResults: CourseResult[])
 function generateSuggestion(
   planned: Course[],
   courseResults: CourseResult[],
-): { title: string; body: string[] } | null {
+  degreeProgress: DegreeItem[],
+  timeline: SemesterPlan[],
+  loadFlags: LoadFlag[],
+): { title: string; body: string[]; severity: SuggestionSeverity } | null {
   const plannedCodes = new Set(planned.map(c => c.code))
   const hasFinn30603 = plannedCodes.has("FINN 30603")
   const hasFinn30103 = plannedCodes.has("FINN 30103")
@@ -940,66 +1090,129 @@ function generateSuggestion(
   const hasEcon43303 = plannedCodes.has("ECON 43303")
   const econ43303Cond = courseResults.find(r => r.code === "ECON 43303" && (r.status === "conditional" || r.badges.includes("workload flag")))
   const totalHrs = planned.reduce((s, c) => s + c.hrs, 0)
-
-  // Primary: FINN 30603 fail -> swap to FINN 30103
-  if (hasFinn30603 && !hasFinn30103 && finn30603Fail) {
-    const body = [
-      "FINN 30103 is required for your Finance minor, only requires FINN 20403 (which you\u2019ve completed with a B), and unlocks FINN 30603 (Investments), FINN 36003 (Corporate Finance), FINN 31003 (Financial Modeling), and FINN 43203 (Financial Data Analytics I) for future semesters.",
-      "You haven\u2019t started your 15-hour Finance minor yet \u2014 with 3 semesters left (including this one), you need to begin now to complete it on time.",
-      "FINN 30103 also counts toward your Jr/Sr business elective requirement (0 of 12 hrs completed), so it pulls double duty.",
-    ]
-    if (hasEcon43303 && econ43303Cond) {
-      body.push("Additionally, consider deferring ECON 43303 to Fall 2027 to lighten your load this semester. That frees a slot for a Natural Science lab (4 hrs for State Minimum Core), which gets harder to fit into senior year.")
-    }
-    return { title: "Replace FINN 30603 with FINN 30103 (Financial Analysis) this semester.", body }
-  }
-
-  // FINN 30103 already added, no FINN 30603
-  if (hasFinn30103 && !hasFinn30603) {
-    const body = [
-      "FINN 30103 unlocks FINN 30603 (Investments), FINN 36003 (Corporate Finance), FINN 31003 (Financial Modeling), and FINN 43203 (Financial Data Analytics I) for Fall 2027 and beyond. You still need 12 more minor hours across 2 remaining semesters.",
-    ]
-    if (hasEcon43303 && econ43303Cond) {
-      body.push("Consider whether ECON 43303 this semester is too heavy alongside Econometrics (4 hrs). The 8-semester plan places it in Fall Year 4.")
-    }
-    body.push("Don\u2019t forget: you still need a Natural Science lecture + lab (4 hrs) for State Minimum Core and 3 more hours of General Electives.")
-    return { title: "Good move adding FINN 30103 \u2014 your Finance minor is now on track.", body }
-  }
-
-  // Both FINN courses planned
-  if (hasFinn30103 && hasFinn30603) {
-    return {
-      title: "Strong plan \u2014 FINN 30103 serves as the corequisite for FINN 30603.",
-      body: [
-        "Both courses count toward your Finance minor and Jr/Sr business elective requirements \u2014 that\u2019s 6 hours of double-duty progress.",
-        "Make sure you can handle " + totalHrs + " total credit hours. " + (totalHrs > STANDARD_MAX ? "That\u2019s above the standard 17-hour limit." : ""),
-        "Still needed: Natural Science lecture + lab (4 hrs, State Min Core) and 3 hrs General Electives.",
-      ],
-    }
-  }
-
-  // Generic
   const failCount = courseResults.filter(r => r.status === "fail").length
+  const conditionalCount = courseResults.filter(r => r.status === "conditional").length
+
+  // Gather issues from all sections
+  const issues: { severity: SuggestionSeverity; message: string }[] = []
+
+  // From Course-by-Course
   if (failCount > 0) {
-    return {
-      title: "Address the prerequisite issues above before registering.",
-      body: [
-        `${failCount} course(s) have unmet prerequisites. You won\u2019t be able to register for these until the issues are resolved.`,
-        "Review each flagged course and consider swapping it for one where prerequisites are met.",
-        "Remember: you still need Natural Science lecture + lab (4 hrs) and 3 hrs of General Electives.",
-      ],
+    issues.push({ severity: "red", message: `${failCount} course(s) have unmet prerequisites and cannot be registered for.` })
+  }
+  if (conditionalCount > 0) {
+    issues.push({ severity: "yellow", message: `${conditionalCount} course(s) have conditional prerequisites (depends on completing in-progress courses with C or better).` })
+  }
+
+  // From Load Assessment
+  for (const flag of loadFlags) {
+    if (flag.type === "error") issues.push({ severity: "red", message: flag.message })
+    if (flag.type === "warning") issues.push({ severity: "yellow", message: `Course load: ${flag.message}` })
+  }
+
+  // From Degree Progress
+  const finProgress = degreeProgress.find(d => d.label.includes("Finance Minor"))
+  if (finProgress && finProgress.value === 0) {
+    issues.push({ severity: "red", message: "Finance minor has 0 hours -- you have not started. With only 3 semesters remaining, you must begin FINN 30103 immediately to have any chance of completing the minor on time." })
+  } else if (finProgress && finProgress.value <= 3 && !hasFinn30103) {
+    issues.push({ severity: "yellow", message: "Finance minor progress is minimal. FINN 30103 is the gateway course -- without it, most upper-level finance courses are locked." })
+  }
+
+  const sciProgress = degreeProgress.find(d => d.label.includes("State Minimum"))
+  if (sciProgress && sciProgress.value < 20) {
+    const sciRemaining = 20 - sciProgress.value
+    if (sciRemaining > 0) {
+      issues.push({ severity: "yellow", message: `Still need ${sciRemaining} hours of State Minimum Core (Natural Science). Pushing this to senior year limits scheduling flexibility.` })
     }
   }
 
-  // All clear
-  if (planned.length > 0) {
-    return {
-      title: "No critical issues detected \u2014 this plan looks solid.",
-      body: [
-        "All prerequisites appear to be met. Verify with your advisor before registering.",
-        "Remaining degree requirements to plan for: Natural Science lecture + lab (4 hrs, State Min Core), " + (plannedCodes.has("FINN 30103") ? "12" : "15") + " hrs Finance minor, and 3 hrs General Electives.",
-      ],
+  // From Timeline
+  for (const sem of timeline) {
+    for (const flag of sem.flags) {
+      if (flag.type === "error" && !issues.some(i => i.message === flag.message)) {
+        issues.push({ severity: "red", message: `${sem.label}: ${flag.message}` })
+      }
+      if (flag.type === "warning" && flag.message.includes("finance-heavy")) {
+        issues.push({ severity: "yellow", message: `${sem.label}: ${flag.message}` })
+      }
     }
+  }
+
+  // Check for bottleneck: pushing FINN 30103 creates a cascading problem
+  if (!hasFinn30103 && !completedCourses.has("FINN 30103") && !inProgressFall2026.has("FINN 30103")) {
+    if (hasFinn30603) {
+      issues.push({ severity: "red", message: "FINN 30603 requires FINN 30103 as a co-requisite. You cannot register for Investments without Financial Analysis." })
+    }
+  }
+
+  // Determine overall severity
+  const overallSeverity: SuggestionSeverity = issues.some(i => i.severity === "red")
+    ? "red"
+    : issues.some(i => i.severity === "yellow")
+      ? "yellow"
+      : "green"
+
+  // ---- Build the suggestion ----
+  if (failCount > 0 && hasFinn30603 && !hasFinn30103 && finn30603Fail) {
+    const body = [
+      "FINN 30103 (Financial Analysis) is required for your Finance minor and is the prerequisite/co-requisite for FINN 30603 (Investments). Replace FINN 30603 with FINN 30103 this semester.",
+      "FINN 30103 only requires FINN 20403 (completed with a B) and unlocks FINN 30603, FINN 36003, FINN 31003, and FINN 43203 for future semesters.",
+      "You haven\u2019t started your 15-hour Finance minor yet -- with 3 semesters left, you need to begin now to complete it on time.",
+    ]
+    if (hasEcon43303 && econ43303Cond) {
+      body.push("Consider deferring ECON 43303 to Fall 2027 to lighten your load. That frees a slot for Natural Science (4 hrs, State Min Core), which gets harder to schedule in senior year.")
+    }
+    return { title: "Critical: Replace FINN 30603 with FINN 30103 this semester.", body, severity: "red" }
+  }
+
+  if (failCount > 0) {
+    const body = [
+      `${failCount} course(s) have unmet prerequisites. You will not be able to register for these until the issues are resolved.`,
+      "Review each flagged course above and swap it for one where all prerequisites are met.",
+    ]
+    if (!hasFinn30103 && !completedCourses.has("FINN 30103")) {
+      body.push("Prioritize adding FINN 30103 to start your Finance minor -- it\u2019s the gateway that unlocks all upper-level finance courses.")
+    }
+    return { title: "Action Required: Prerequisite issues must be resolved before registering.", body, severity: "red" }
+  }
+
+  // Yellow scenarios
+  if (overallSeverity === "yellow") {
+    const body: string[] = []
+    if (hasFinn30103 && !hasFinn30603) {
+      body.push("FINN 30103 unlocks FINN 30603, FINN 36003, FINN 31003, and FINN 43203 for Fall 2027. You still need 12 more Finance minor hours across 2 semesters -- plan on 2 FINN courses per semester.")
+    }
+    if (hasEcon43303 && econ43303Cond) {
+      body.push("ECON 43303 alongside ECON 47403 (4 hrs) is a heavy load. The 8-semester plan places ECON 43303 in Fall Year 4. Consider deferring it.")
+    }
+    if (sciProgress && sciProgress.value < 20) {
+      body.push("Don\u2019t forget: Natural Science lecture + lab (4 hrs) is still needed for State Minimum Core. Scheduling this sooner gives you more flexibility later.")
+    }
+    if (totalHrs > STANDARD_MAX) {
+      body.push(`Your ${totalHrs}-hour plan exceeds the standard 17-hour limit. Make sure you have advisor approval.`)
+    }
+    if (body.length === 0) {
+      body.push("Your plan has some minor concerns (see conditional flags above) but can proceed if in-progress courses are completed successfully.")
+    }
+    return { title: "Caution: A few items need attention, but you can move forward.", body, severity: "yellow" }
+  }
+
+  // Green -- all clear
+  if (planned.length > 0) {
+    const body = [
+      "All prerequisites are met and your course load is within normal limits. Your plan advances your Economics major, Business Core, and degree requirements effectively.",
+    ]
+    if (hasFinn30103) {
+      body.push("Starting FINN 30103 this semester puts your Finance minor on a solid trajectory. Plan on 2 finance courses per semester for the next 2 semesters to complete it.")
+    }
+    if (hasFinn30103 && hasFinn30603) {
+      body.push("Both FINN 30103 and FINN 30603 count toward your Finance minor and Jr/Sr business elective hours -- that\u2019s efficient double-duty progress.")
+    }
+    const remaining = 120 - (STUDENT.hoursCompleted + STUDENT.hoursInProgress + totalHrs)
+    if (remaining > 0) {
+      body.push(`After this semester, you\u2019ll have ${remaining} credit hours remaining across Fall 2027 and Spring 2028 (~${Math.ceil(remaining / 2)} hrs/semester). Very manageable.`)
+    }
+    return { title: "Looks good -- this plan keeps you on track for Spring 2028 graduation.", body, severity: "green" }
   }
 
   return null
@@ -1009,30 +1222,199 @@ function generateSuggestion(
 /*  Graduation timeline                                                */
 /* ------------------------------------------------------------------ */
 
-function computeTimeline(planned: Course[]): string {
-  const totalPlannedHrs = planned.reduce((s, c) => s + c.hrs, 0)
-  const hrsAfter = STUDENT.hoursCompleted + STUDENT.hoursInProgress + totalPlannedHrs
-  const remaining = 120 - hrsAfter
+function computeTimeline(planned: Course[]): SemesterPlan[] {
   const plannedCodes = new Set(planned.map(c => c.code))
   const hasFinn30103 = plannedCodes.has("FINN 30103")
+  const hasEcon43303 = plannedCodes.has("ECON 43303")
+  const hasEcon31303 = plannedCodes.has("ECON 31303")
+  const hasEcon47403 = plannedCodes.has("ECON 47403")
+  const hasSevi = plannedCodes.has("SEVI 30103")
+  // Check which science is planned
+  const sciLecture = ["ASTR 10003", "ENSC 10003", "PHYS 10103"].find(c => plannedCodes.has(c))
+  const sciLab = sciLecture ? { "ASTR 10003": "ASTR 10001", "ENSC 10003": "ENSC 10001", "PHYS 10103": "PHYS 10101" }[sciLecture] : null
+  const genElecPlanned = ["COMM 13003", "PSYC 21003", "SOCI 20003", "PHIL 32003", "GEOS 10003", "ANTH 10003"].find(c => plannedCodes.has(c))
 
-  if (remaining <= 0) {
-    return "With this semester\u2019s courses, you will reach 120 hours. Verify all category requirements (Finance minor, State Min Core, General Electives) are fully satisfied for graduation."
+  // ---- SPRING 2027 (current plan) ----
+  const spring27: SemesterPlan = {
+    label: "Spring 2027 (Your Current Plan)",
+    courses: planned.map(c => ({ code: c.code, name: c.name, hrs: c.hrs })),
+    totalHrs: planned.reduce((s, c) => s + c.hrs, 0),
+    flags: [],
+  }
+  if (spring27.totalHrs > 17) {
+    spring27.flags.push({ type: "warning", message: `${spring27.totalHrs} hours exceeds the standard 17-hour limit. Requires GPA 2.75+ and advisor approval.` })
+  }
+  if (spring27.totalHrs < 12) {
+    spring27.flags.push({ type: "info", message: `Only ${spring27.totalHrs} hours -- below full-time (12 hrs). May affect financial aid.` })
   }
 
-  const semestersLeft = remaining <= 19 ? 1 : remaining <= 36 ? 2 : 3
-  const avgPerSem = Math.ceil(remaining / semestersLeft)
-  const semesterNames = semestersLeft === 1
-    ? "Fall 2027"
-    : semestersLeft === 2
-      ? "Fall 2027 and Spring 2028"
-      : "Fall 2027, Spring 2028, and Summer 2028"
+  // ---- Determine what's left after Spring 2027 ----
+  // Remaining required courses
+  const needEcon31303 = !hasEcon31303 && !completedCourses.has("ECON 31303") && !inProgressFall2026.has("ECON 31303")
+  const needEcon43303 = !hasEcon43303 && !completedCourses.has("ECON 43303") && !inProgressFall2026.has("ECON 43303")
+  const needEcon47403 = !hasEcon47403 && !completedCourses.has("ECON 47403") && !inProgressFall2026.has("ECON 47403")
+  const needSevi = !hasSevi && !completedCourses.has("SEVI 30103") && !inProgressFall2026.has("SEVI 30103")
+  const needScience = !sciLecture
+  const needGenElec = !genElecPlanned && !completedCourses.has("COMM 13003") && !completedCourses.has("PSYC 21003")
 
-  const minorNote = hasFinn30103
-    ? "You\u2019ve started the Finance minor \u2014 plan to take 2-3 FINN courses per remaining semester to complete the 15-hour requirement."
-    : "You still need all 15 hours of Finance minor courses. Starting FINN 30103 this spring is critical to staying on track for both the degree and the minor by Spring 2028."
+  // Finance minor: 15 hrs needed, see what's planned
+  const finCodesPlanned = planned.filter(c => c.code.startsWith("FINN") && parseInt(c.code.split(" ")[1]) >= 30000)
+  const finHrsPlanned = finCodesPlanned.reduce((s, c) => s + c.hrs, 0)
+  const finHrsRemaining = Math.max(0, 15 - finHrsPlanned)
 
-  return `You have ${remaining} credit hours remaining across ${semesterNames} (~${avgPerSem} hrs/semester). ${avgPerSem <= 15 ? "Very manageable." : avgPerSem <= 17 ? "Tight but doable." : "That\u2019s a heavy load \u2014 consider summer courses."} ${minorNote}`
+  // ECON elective hrs still needed after this semester
+  const econElecPlanned = planned.filter(c => c.code.startsWith("ECON") && parseInt(c.code.split(" ")[1]) >= 30000 &&
+    !["ECON 30303", "ECON 31303", "ECON 43303", "ECON 47403"].includes(c.code))
+  const econElecHrsAfterSpring = Math.max(0, 6 - (3 + econElecPlanned.reduce((s, c) => s + c.hrs, 0))) // 3 = ECON 34303 IP
+
+  // Jr/Sr elective hrs remaining
+  const jrSrFromFinMinor = finHrsPlanned // Finance minor courses count
+  const jrSrOther = planned.filter(c => {
+    const num = parseInt(c.code.split(" ")[1])
+    const prefix = c.code.split(" ")[0]
+    const jrSrPrefixes = ["ACCT", "BLAW", "ECON", "FINN", "ISYS", "MGMT", "MKTG", "SCMT", "SEVI", "BUSI"]
+    const excluded = new Set(["ECON 30303", "ECON 31303", "ECON 47403", "ECON 43303", "ECON 47503", "SEVI 30103", "MKTG 34303", "ECON 30503", "ECON 30603", "MGMT 35603"])
+    return num >= 30000 && jrSrPrefixes.includes(prefix) && !excluded.has(c.code) && !c.code.startsWith("FINN")
+  }).reduce((s, c) => s + c.hrs, 0)
+  const jrSrHrsRemaining = Math.max(0, 12 - jrSrFromFinMinor - jrSrOther)
+
+  // ---- FALL 2027 ----
+  const fall27Courses: { code: string; name: string; hrs: number; note?: string }[] = []
+  const fall27Flags: { type: "info" | "warning" | "error"; message: string }[] = []
+
+  // ECON 43303 if not taken in Spring (needs ECON 30303 which will be done by then)
+  if (needEcon43303) {
+    fall27Courses.push({ code: "ECON 43303", name: "Economics of Organizations", hrs: 3, note: "Prereq ECON 30303 will be completed" })
+  }
+  // ECON 31303 if deferred
+  if (needEcon31303) {
+    fall27Courses.push({ code: "ECON 31303", name: "Macroeconomic Theory", hrs: 3, note: "Critical required course" })
+  }
+  // ECON 47403 if deferred
+  if (needEcon47403) {
+    fall27Courses.push({ code: "ECON 47403", name: "Intro to Econometrics", hrs: 4, note: "Core quantitative methods" })
+  }
+  // SEVI 30103 if deferred
+  if (needSevi) {
+    fall27Courses.push({ code: "SEVI 30103", name: "Strategic Management", hrs: 3, note: "Business Core capstone" })
+  }
+
+  // Finance minor -- need 2-3 courses per semester
+  const finFall27Count = Math.min(2, Math.ceil(finHrsRemaining / 3))
+  if (finHrsRemaining > 0 && hasFinn30103) {
+    // FINN 30103 done in Spring, can now take courses requiring it
+    const finOptions = ["FINN 30603", "FINN 36003", "FINN 31003", "FINN 31303", "FINN 37003"]
+    let added = 0
+    for (const fc of finOptions) {
+      if (added >= finFall27Count) break
+      if (!plannedCodes.has(fc) && !completedCourses.has(fc)) {
+        const cat = catalog[fc]
+        fall27Courses.push({ code: fc, name: cat?.name || fc, hrs: 3, note: "Finance minor" })
+        added++
+      }
+    }
+  } else if (finHrsRemaining > 0 && !hasFinn30103) {
+    // No FINN 30103 yet -- must take it Fall 2027
+    fall27Courses.push({ code: "FINN 30103", name: "Financial Analysis", hrs: 3, note: "Required gateway for Finance minor" })
+    fall27Flags.push({ type: "warning", message: "Finance minor is delayed because FINN 30103 is not in your Spring 2027 plan. Starting it in Fall 2027 means you'll need 12 hrs of finance in your final 2 semesters." })
+    if (finFall27Count > 1) {
+      fall27Courses.push({ code: "FINN 31003", name: "Financial Modeling", hrs: 3, note: "Only needs FINN 20403 (completed)" })
+    }
+  }
+
+  // ECON elective if needed
+  if (econElecHrsAfterSpring > 0) {
+    fall27Courses.push({ code: "ECON Elective", name: "ECON 3000/4000-level elective", hrs: 3, note: "Choose from available options" })
+  }
+
+  // Science if not taken
+  if (needScience) {
+    fall27Courses.push({ code: "ASTR 10003", name: "Survey of Astronomy", hrs: 3, note: "Natural Science requirement" })
+    fall27Courses.push({ code: "ASTR 10001", name: "Astronomy Lab", hrs: 1, note: "Matching lab" })
+  }
+
+  // General elective if needed
+  if (needGenElec) {
+    fall27Courses.push({ code: "Gen Elective", name: "General elective", hrs: 3, note: "Any elective course" })
+  }
+
+  const fall27Total = fall27Courses.reduce((s, c) => s + c.hrs, 0)
+  if (fall27Total > 17) {
+    fall27Flags.push({ type: "warning", message: `Projected ${fall27Total} hours is above the standard 17-hour limit. Some courses may need to shift to Spring 2028.` })
+  }
+  if (fall27Total > 19) {
+    fall27Flags.push({ type: "error", message: `Projected ${fall27Total} hours exceeds the absolute maximum. This schedule is not feasible.` })
+  }
+
+  const fall27: SemesterPlan = { label: "Fall 2027 (Projected)", courses: fall27Courses, totalHrs: fall27Total, flags: fall27Flags }
+
+  // ---- SPRING 2028 (Final Semester) ----
+  const spring28Courses: { code: string; name: string; hrs: number; note?: string }[] = []
+  const spring28Flags: { type: "info" | "warning" | "error"; message: string }[] = []
+
+  // Remaining Finance minor after Fall 2027
+  const finHrsAfterFall27 = Math.max(0, finHrsRemaining - (finFall27Count * 3))
+  const finSpring28Count = Math.ceil(finHrsAfterFall27 / 3)
+  if (finHrsAfterFall27 > 0) {
+    const finLateOptions = ["FINN 30603", "FINN 36003", "FINN 31003", "FINN 31303", "FINN 37003", "FINN 30003", "FINN 36203"]
+    let added = 0
+    for (const fc of finLateOptions) {
+      if (added >= finSpring28Count) break
+      if (!plannedCodes.has(fc) && !completedCourses.has(fc) && !fall27Courses.some(c => c.code === fc)) {
+        const cat = catalog[fc]
+        spring28Courses.push({ code: fc, name: cat?.name || fc, hrs: 3, note: "Finance minor completion" })
+        added++
+      }
+    }
+  }
+
+  // Jr/Sr elective hours if still needed
+  if (jrSrHrsRemaining > 0) {
+    const jrSrNeeded = Math.ceil(jrSrHrsRemaining / 3)
+    let jrSrAdded = 0
+    const jrSrLateOptions = ["BLAW 30303", "ISYS 41903", "MGMT 42503", "SEVI 39303", "MKTG 38303"]
+    for (const jc of jrSrLateOptions) {
+      if (jrSrAdded >= jrSrNeeded) break
+      if (!plannedCodes.has(jc) && !completedCourses.has(jc) && !fall27Courses.some(c => c.code === jc) && !spring28Courses.some(c => c.code === jc)) {
+        const cat = catalog[jc]
+        spring28Courses.push({ code: jc, name: cat?.name || jc, hrs: 3, note: "Jr/Sr business elective" })
+        jrSrAdded++
+      }
+    }
+  }
+
+  // Any remaining ECON electives
+  if (econElecHrsAfterSpring > 3) {
+    spring28Courses.push({ code: "ECON Elective", name: "ECON 3000/4000-level elective", hrs: 3, note: "Final ECON elective slot" })
+  }
+
+  const spring28Total = spring28Courses.reduce((s, c) => s + c.hrs, 0)
+
+  // Check for finance-heavy final semester
+  const finCoursesSpring28 = spring28Courses.filter(c => c.code.startsWith("FINN")).length
+  if (finCoursesSpring28 >= 3) {
+    spring28Flags.push({ type: "warning", message: `${finCoursesSpring28} finance courses in your final semester creates a finance-heavy load. Consider distributing finance courses more evenly.` })
+  }
+
+  // Check overall feasibility
+  const totalHrsAfterAll = STUDENT.hoursCompleted + STUDENT.hoursInProgress + spring27.totalHrs + fall27Total + spring28Total
+  if (totalHrsAfterAll < 120) {
+    const gap = 120 - totalHrsAfterAll
+    spring28Flags.push({ type: "error", message: `Still ${gap} credit hours short of the 120-hour graduation requirement. May need additional courses or a summer session.` })
+    // Add filler if gap is small
+    if (gap <= 6) {
+      spring28Courses.push({ code: "Additional", name: "Additional hours needed", hrs: gap, note: `${gap} more hours to reach 120` })
+    }
+  }
+  if (spring28Total > 17) {
+    spring28Flags.push({ type: "warning", message: `Projected ${spring28Total} hours in final semester is above standard limit. Seniors may take up to 19 hrs with dean approval.` })
+  }
+
+  spring28Flags.push({ type: "info", message: "This is the target graduation semester (Spring 2028). All degree requirements must be completed." })
+
+  const spring28: SemesterPlan = { label: "Spring 2028 (Final Semester)", courses: spring28Courses, totalHrs: spring28Total, flags: spring28Flags }
+
+  return [spring27, fall27, spring28]
 }
 
 /* ------------------------------------------------------------------ */
@@ -1377,8 +1759,8 @@ export function validatePlan(planned: Course[]): ValidationResult {
   const courses = planned.map(c => validateCourse(c, plannedCodes))
   const loadFlags = evaluateLoad(totalHrs)
   const degreeProgress = computeDegreeProgress(planned, courses)
-  const suggestion = generateSuggestion(planned, courses)
   const timeline = computeTimeline(planned)
+  const suggestion = generateSuggestion(planned, courses, degreeProgress, timeline, loadFlags)
 
   const passCount = courses.filter(c => c.status === "pass").length
   const conditionalCount = courses.filter(c => c.status === "conditional").length
