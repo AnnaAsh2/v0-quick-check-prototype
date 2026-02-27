@@ -51,7 +51,7 @@ export default function Home() {
           </div>
         </div>
 
-        <StepIndicator current={screen} />
+        <StepIndicator current={screen} onNavigate={goTo} />
 
         <div className="hidden items-center gap-1.5 text-xs text-muted-foreground md:flex">
           <span className="font-medium">Walton College of Business</span>
