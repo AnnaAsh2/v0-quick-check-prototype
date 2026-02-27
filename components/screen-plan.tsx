@@ -75,6 +75,19 @@ const catalogue: Course[] = [
 ]
 
 /* ------------------------------------------------------------------ */
+/*  Science lecture <-> lab auto-pair map                                */
+/* ------------------------------------------------------------------ */
+
+const scienceLinks: Record<string, string> = {
+  "ASTR 10003": "ASTR 10001",
+  "ASTR 10001": "ASTR 10003",
+  "ENSC 10003": "ENSC 10001",
+  "ENSC 10001": "ENSC 10003",
+  "PHYS 10103": "PHYS 10101",
+  "PHYS 10101": "PHYS 10103",
+}
+
+/* ------------------------------------------------------------------ */
 /*  Props                                                               */
 /* ------------------------------------------------------------------ */
 
@@ -124,12 +137,23 @@ export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
         )
       : []
 
-  const removeCourse = (code: string) => setPlanned((prev) => prev.filter((c) => c.code !== code))
+  const removeCourse = (code: string) => {
+    const linked = scienceLinks[code]
+    setPlanned((prev) => prev.filter((c) => c.code !== code && c.code !== linked))
+  }
 
   const addCourse = (course: Course) => {
-    if (!plannedCodes.has(course.code)) {
-      setPlanned((prev) => [...prev, course])
-    }
+    setPlanned((prev) => {
+      const next = [...prev]
+      if (!plannedCodes.has(course.code)) next.push(course)
+      // Auto-pair science lecture <-> lab
+      const linked = scienceLinks[course.code]
+      if (linked && !plannedCodes.has(linked)) {
+        const pair = catalogue.find(c => c.code === linked)
+        if (pair) next.push(pair)
+      }
+      return next
+    })
     setQuery("")
     setShowResults(false)
   }
