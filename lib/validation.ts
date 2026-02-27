@@ -1264,6 +1264,17 @@ function generateSuggestion(
     return { title: "Action Required: Prerequisite issues must be resolved before registering.", body, severity: "red" }
   }
 
+  // Red scenarios from non-prerequisite issues (load, timeline, etc.)
+  if (overallSeverity === "red") {
+    const redIssues = issues.filter(i => i.severity === "red")
+    const body: string[] = redIssues.map(i => i.message)
+    const yellowIssues = issues.filter(i => i.severity === "yellow")
+    if (yellowIssues.length > 0) {
+      body.push(`Additionally, ${yellowIssues.length} item${yellowIssues.length > 1 ? "s" : ""} need attention: ${yellowIssues.map(i => i.message).join("; ")}`)
+    }
+    return { title: "Action Required: Critical issues found in your plan.", body, severity: "red" }
+  }
+
   // Yellow scenarios
   if (overallSeverity === "yellow") {
     const body: string[] = []
@@ -1278,6 +1289,16 @@ function generateSuggestion(
     }
     if (totalHrs > STANDARD_MAX) {
       body.push(`Your ${totalHrs}-hour plan exceeds the standard 17-hour limit. Make sure you have advisor approval.`)
+    }
+    if (totalHrs < STANDARD_MIN && totalHrs > 0) {
+      body.push(`Your ${totalHrs}-hour plan is below the standard 15-hour minimum. This could delay your graduation timeline -- consider adding a course if possible.`)
+    }
+    // Surface any remaining yellow issues not already covered
+    const yellowMessages = issues.filter(i => i.severity === "yellow").map(i => i.message)
+    for (const msg of yellowMessages) {
+      if (!body.some(b => b.includes(msg.slice(0, 30)))) {
+        body.push(msg)
+      }
     }
     if (body.length === 0) {
       body.push("Your plan has some minor concerns (see conditional flags above) but can proceed if in-progress courses are completed successfully.")
