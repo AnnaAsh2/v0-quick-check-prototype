@@ -1516,11 +1516,26 @@ function computeTimeline(planned: Course[]): SemesterPlan[] {
     return { score, flags }
   }
 
-  /**
-   * Generate a valid arrangement: assign courses to Fall vs Spring respecting prerequisites.
-   * `preference` is an array of course codes to push to Spring if possible (to try different combos).
-   */
-  function buildArrangement(preferSpring: Set<string>): { fall: Slot[]; spring: Slot[] } | null {
+  /* -------------------------------------------------------------- */
+  /*  Two-phase scheduling: assign then rebalance                   */
+  /* -------------------------------------------------------------- */
+
+  /** Check if any Spring course depends on this Fall course (prerequisite chain) */
+  function springDependsOn(code: string, fallCodes: Set<string>, springList: Slot[]): boolean {
+    // A Spring course depends on a Fall course if that Fall course is in its prereqs
+    for (const rc of remaining) {
+      if (springList.some(s => s.code === rc.code) && rc.prereqsNeeded.includes(code)) return true
+    }
+    // Also check co-requisite pairs
+    const coReqPairs: [string, string][] = [["ASTR 10003", "ASTR 10001"], ["ENSC 10003", "ENSC 10001"], ["PHYS 10103", "PHYS 10101"]]
+    for (const [a, b] of coReqPairs) {
+      if (code === a && fallCodes.has(b)) return true
+      if (code === b && fallCodes.has(a)) return true
+    }
+    return false
+  }
+
+  function buildAndRebalance(): { fall: Slot[]; spring: Slot[] } {
     const fall: Slot[] = []
     const spring: Slot[] = []
     const fallCodes = new Set<string>()
@@ -1540,108 +1555,106 @@ function computeTimeline(planned: Course[]): SemesterPlan[] {
       return pa - pb
     })
 
-    // First pass: assign to Fall or Spring
-    const deferred: TimelineCourse[] = []
+    // Phase 1: Initial assignment -- everything that CAN go to Fall goes to Fall,
+    // everything else goes to Spring.
+    const mustDefer: TimelineCourse[] = []
     for (const course of sorted) {
-      const canFall = canPlace(course, doneAfterSpring27, fallCodes)
-
-      if (preferSpring.has(course.code) && canFall) {
-        // Preference to defer -- check if Spring is still valid
-        deferred.push(course)
-        continue
-      }
-
-      if (canFall) {
+      if (canPlace(course, doneAfterSpring27, fallCodes)) {
         fall.push({ code: course.code, name: course.name, hrs: course.hrs, note: course.note })
         fallCodes.add(course.code)
         doneAfterFall.add(course.code)
       } else {
-        deferred.push(course)
+        mustDefer.push(course)
       }
     }
-
-    // Assign deferred courses to Spring (they either need Fall prereqs or were preference-deferred)
-    for (const course of deferred) {
-      const canSpring = canPlace(course, doneAfterFall, springCodes)
-      if (canSpring) {
+    for (const course of mustDefer) {
+      if (canPlace(course, doneAfterFall, springCodes)) {
         spring.push({ code: course.code, name: course.name, hrs: course.hrs, note: course.note })
         springCodes.add(course.code)
       } else {
-        // Try moving to Fall after all
-        const canFallNow = canPlace(course, doneAfterSpring27, fallCodes)
-        if (canFallNow) {
-          fall.push({ code: course.code, name: course.name, hrs: course.hrs, note: course.note })
-          fallCodes.add(course.code)
-          doneAfterFall.add(course.code)
-        } else {
-          // Cannot place -- this is a problem
-          spring.push({ code: course.code, name: course.name, hrs: course.hrs, note: `${course.note || ""} (prereq may not be met)`.trim() })
-          springCodes.add(course.code)
-        }
+        // Truly unplaceable -- add to Spring with warning
+        spring.push({ code: course.code, name: course.name, hrs: course.hrs, note: `${course.note || ""} (prereq may not be met)`.trim() })
+        springCodes.add(course.code)
       }
     }
 
-    // Handle co-requisites: ASTR 10003 + 10001 must be in same semester
-    const coReqPairs = [["ASTR 10003", "ASTR 10001"], ["ENSC 10003", "ENSC 10001"], ["PHYS 10103", "PHYS 10101"]]
+    // Enforce co-requisite pairs in same semester
+    const coReqPairs: [string, string][] = [["ASTR 10003", "ASTR 10001"], ["ENSC 10003", "ENSC 10001"], ["PHYS 10103", "PHYS 10101"]]
     for (const [a, b] of coReqPairs) {
-      const aInFall = fall.some(c => c.code === a)
-      const bInSpring = spring.some(c => c.code === b)
-      if (aInFall && bInSpring) {
-        // Move b to Fall
+      const aFall = fall.some(c => c.code === a)
+      const bSpring = spring.some(c => c.code === b)
+      if (aFall && bSpring) {
         const idx = spring.findIndex(c => c.code === b)
-        if (idx >= 0) {
-          fall.push(spring[idx])
-          spring.splice(idx, 1)
+        if (idx >= 0) { fall.push(spring[idx]); spring.splice(idx, 1); fallCodes.add(b); springCodes.delete(b) }
+      }
+      const aSpring = spring.some(c => c.code === a)
+      const bFall = fall.some(c => c.code === b)
+      if (aSpring && bFall) {
+        const idx = fall.findIndex(c => c.code === b)
+        if (idx >= 0) { spring.push(fall[idx]); fall.splice(idx, 1); springCodes.add(b); fallCodes.delete(b) }
+      }
+    }
+
+    // Phase 2: Rebalance -- move courses from Fall to Spring to even out hours
+    // and reduce prefix concentration. A course can move if:
+    //   (a) no Spring course depends on it as a prerequisite
+    //   (b) its own prerequisites will still be done after Fall (always true since
+    //       it was already placed in Fall, and we're moving to Spring which is later)
+    //   (c) it isn't a co-req pair anchor
+    const coReqAnchors = new Set<string>()
+    for (const [a, b] of coReqPairs) {
+      if (fallCodes.has(a) && fallCodes.has(b)) { coReqAnchors.add(a); coReqAnchors.add(b) }
+      if (springCodes.has(a) && springCodes.has(b)) { coReqAnchors.add(a); coReqAnchors.add(b) }
+    }
+
+    // Never move FINN 30103 to Spring -- it's the gateway that must happen ASAP
+    const neverMove = new Set(["FINN 30103"])
+
+    // Iteratively move courses from Fall -> Spring while it improves the score
+    let improved = true
+    while (improved) {
+      improved = false
+      const fallHrs = fall.reduce((s, c) => s + c.hrs, 0)
+      const springHrs = spring.reduce((s, c) => s + c.hrs, 0)
+
+      // Only rebalance if Fall is heavier
+      if (fallHrs <= springHrs + 2) break
+
+      // Find the best course to move: pick the one that reduces score the most
+      let bestMoveIdx = -1
+      let bestMoveScore = scorePlan(fall, spring).score
+
+      for (let i = 0; i < fall.length; i++) {
+        const candidate = fall[i]
+        if (neverMove.has(candidate.code)) continue
+        if (coReqAnchors.has(candidate.code)) continue
+        if (springDependsOn(candidate.code, fallCodes, spring)) continue
+
+        // Simulate the move
+        const testFall = [...fall.slice(0, i), ...fall.slice(i + 1)]
+        const testSpring = [...spring, candidate]
+        const { score } = scorePlan(testFall, testSpring)
+        if (score < bestMoveScore) {
+          bestMoveScore = score
+          bestMoveIdx = i
         }
       }
-      const aInSpring = spring.some(c => c.code === a)
-      const bInFall = fall.some(c => c.code === b)
-      if (aInSpring && bInFall) {
-        const idx = fall.findIndex(c => c.code === b)
-        if (idx >= 0) {
-          spring.push(fall[idx])
-          fall.splice(idx, 1)
-        }
+
+      if (bestMoveIdx >= 0) {
+        const moved = fall.splice(bestMoveIdx, 1)[0]
+        spring.push(moved)
+        fallCodes.delete(moved.code)
+        springCodes.add(moved.code)
+        // Note: doneAfterFall still contains it, which is fine -- Spring is after Fall
+        improved = true
       }
     }
 
     return { fall, spring }
   }
 
-  /* --- Try multiple permutations --- */
-
-  // Courses that could be deferred to Spring to create different arrangements
-  const deferCandidates = remaining
-    .filter(c => c.prereqsNeeded.length === 0 && c.code !== "FINN 30103") // never defer FINN 30103
-    .map(c => c.code)
-
-  // Generate permutations: no deferrals, then try deferring 1-2 courses at a time
-  const permutations: Set<string>[] = [new Set()]
-  for (const code of deferCandidates.slice(0, 6)) {
-    permutations.push(new Set([code]))
-  }
-  for (let i = 0; i < Math.min(deferCandidates.length, 5); i++) {
-    for (let j = i + 1; j < Math.min(deferCandidates.length, 6); j++) {
-      permutations.push(new Set([deferCandidates[i], deferCandidates[j]]))
-    }
-  }
-
-  let bestFall: Slot[] = []
-  let bestSpring: Slot[] = []
-  let bestScore = Infinity
-  let bestFlags: { sem: number; type: "info" | "warning" | "error"; message: string }[] = []
-
-  for (const pref of permutations) {
-    const arrangement = buildArrangement(pref)
-    if (!arrangement) continue
-    const { score, flags } = scorePlan(arrangement.fall, arrangement.spring)
-    if (score < bestScore) {
-      bestScore = score
-      bestFall = arrangement.fall
-      bestSpring = arrangement.spring
-      bestFlags = flags
-    }
-  }
+  const { fall: bestFall, spring: bestSpring } = buildAndRebalance()
+  const { flags: bestFlags } = scorePlan(bestFall, bestSpring)
 
   /* --- Build semester plans from best arrangement --- */
   const fall27Flags = bestFlags.filter(f => f.sem === 0).map(f => ({ type: f.type, message: f.message }))
