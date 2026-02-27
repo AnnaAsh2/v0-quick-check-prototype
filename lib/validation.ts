@@ -1474,20 +1474,21 @@ function computeTimeline(planned: Course[]): SemesterPlan[] {
     const fallHrs = fall.reduce((s, c) => s + c.hrs, 0)
     const springHrs = spring.reduce((s, c) => s + c.hrs, 0)
 
-    // Overload checks
-    if (fallHrs > 19) { score += 100; flags.push({ sem: 0, type: "error", message: `${fallHrs} hours exceeds the absolute 19-hour maximum. This schedule is not feasible.` }) }
-    else if (fallHrs > 17) { score += 10; flags.push({ sem: 0, type: "warning", message: `${fallHrs} hours is above the standard 17-hour limit. Requires GPA 2.75+ and advisor approval.` }) }
+    // Overload checks -- PROPORTIONAL penalty so moving one course always helps
+    if (fallHrs > 19) { score += 50 + (fallHrs - 19) * 10; flags.push({ sem: 0, type: "error", message: `${fallHrs} hours exceeds the absolute 19-hour maximum. This schedule is not feasible.` }) }
+    else if (fallHrs > 17) { score += 10 + (fallHrs - 17) * 3; flags.push({ sem: 0, type: "warning", message: `${fallHrs} hours is above the standard 17-hour limit. Requires GPA 2.75+ and advisor approval.` }) }
 
-    if (springHrs > 19) { score += 100; flags.push({ sem: 1, type: "error", message: `${springHrs} hours exceeds the absolute 19-hour maximum. This schedule is not feasible.` }) }
-    else if (springHrs > 17) { score += 5; flags.push({ sem: 1, type: "warning", message: `${springHrs} hours in final semester is above standard limit. Seniors may take up to 19 hrs with dean approval.` }) }
+    if (springHrs > 19) { score += 50 + (springHrs - 19) * 10; flags.push({ sem: 1, type: "error", message: `${springHrs} hours exceeds the absolute 19-hour maximum. This schedule is not feasible.` }) }
+    else if (springHrs > 17) { score += 5 + (springHrs - 17) * 2; flags.push({ sem: 1, type: "warning", message: `${springHrs} hours in final semester is above standard limit. Seniors may take up to 19 hrs with dean approval.` }) }
 
     // Underload checks
-    if (fallHrs > 0 && fallHrs < 12) { score += 3; flags.push({ sem: 0, type: "info", message: `Only ${fallHrs} hours -- below full-time (12 hrs). May affect financial aid.` }) }
-    if (springHrs > 0 && springHrs < 12) { score += 3; flags.push({ sem: 1, type: "info", message: `Only ${springHrs} hours -- below full-time (12 hrs). May affect financial aid.` }) }
+    if (fallHrs > 0 && fallHrs < 12) { score += 3 + (12 - fallHrs); flags.push({ sem: 0, type: "info", message: `Only ${fallHrs} hours -- below full-time (12 hrs). May affect financial aid.` }) }
+    if (springHrs > 0 && springHrs < 12) { score += 3 + (12 - springHrs); flags.push({ sem: 1, type: "info", message: `Only ${springHrs} hours -- below full-time (12 hrs). May affect financial aid.` }) }
 
-    // Balance penalty -- prefer even distribution
+    // Balance penalty -- proportional to imbalance
     const diff = Math.abs(fallHrs - springHrs)
-    if (diff > 4) { score += 3; flags.push({ sem: diff > 0 ? 0 : 1, type: "info", message: `Semesters are unbalanced (${fallHrs} vs ${springHrs} hrs). Consider evening out the load.` }) }
+    score += diff  // every hour of imbalance costs 1 point
+    if (diff > 4) { flags.push({ sem: fallHrs > springHrs ? 0 : 1, type: "info", message: `Semesters are unbalanced (${fallHrs} vs ${springHrs} hrs). Consider evening out the load.` }) }
 
     // Prefix concentration: flag 3+ courses of same type in either semester
     for (const [semIdx, semCourses] of [[0, fall], [1, spring]] as [number, Slot[]][]) {
@@ -1520,17 +1521,18 @@ function computeTimeline(planned: Course[]): SemesterPlan[] {
   /*  Two-phase scheduling: assign then rebalance                   */
   /* -------------------------------------------------------------- */
 
-  /** Check if any Spring course depends on this Fall course (prerequisite chain) */
-  function springDependsOn(code: string, fallCodes: Set<string>, springList: Slot[]): boolean {
-    // A Spring course depends on a Fall course if that Fall course is in its prereqs
+  /**
+   * Check if moving `code` from Fall to Spring would break any prerequisite chain.
+   * Returns true if some Spring course needs `code` as a prereq AND `code`
+   * wouldn't be done in time (i.e. code must stay in Fall so Spring can use it).
+   *
+   * Since moving `code` to Spring means it's taken SAME semester as those Spring
+   * courses, it wouldn't be a completed prereq. So if any Spring course lists
+   * `code` in prereqsNeeded, we can't move it.
+   */
+  function springDependsOn(code: string, _fallCodes: Set<string>, springList: Slot[]): boolean {
     for (const rc of remaining) {
       if (springList.some(s => s.code === rc.code) && rc.prereqsNeeded.includes(code)) return true
-    }
-    // Also check co-requisite pairs
-    const coReqPairs: [string, string][] = [["ASTR 10003", "ASTR 10001"], ["ENSC 10003", "ENSC 10001"], ["PHYS 10103", "PHYS 10101"]]
-    for (const [a, b] of coReqPairs) {
-      if (code === a && fallCodes.has(b)) return true
-      if (code === b && fallCodes.has(a)) return true
     }
     return false
   }
@@ -1596,21 +1598,19 @@ function computeTimeline(planned: Course[]): SemesterPlan[] {
     }
 
     // Phase 2: Rebalance -- move courses from Fall to Spring to even out hours
-    // and reduce prefix concentration. A course can move if:
-    //   (a) no Spring course depends on it as a prerequisite
-    //   (b) its own prerequisites will still be done after Fall (always true since
-    //       it was already placed in Fall, and we're moving to Spring which is later)
-    //   (c) it isn't a co-req pair anchor
-    const coReqAnchors = new Set<string>()
+    // and reduce prefix concentration.
+
+    // Build co-req partner lookup: if a course has a co-req in the same semester,
+    // they must move together.
+    const coReqPartner = new Map<string, string>()
     for (const [a, b] of coReqPairs) {
-      if (fallCodes.has(a) && fallCodes.has(b)) { coReqAnchors.add(a); coReqAnchors.add(b) }
-      if (springCodes.has(a) && springCodes.has(b)) { coReqAnchors.add(a); coReqAnchors.add(b) }
+      if (fallCodes.has(a) && fallCodes.has(b)) { coReqPartner.set(a, b); coReqPartner.set(b, a) }
     }
 
     // Never move FINN 30103 to Spring -- it's the gateway that must happen ASAP
     const neverMove = new Set(["FINN 30103"])
 
-    // Iteratively move courses from Fall -> Spring while it improves the score
+    // Iteratively move courses (or co-req pairs) from Fall -> Spring while it improves the score
     let improved = true
     while (improved) {
       improved = false
@@ -1620,32 +1620,54 @@ function computeTimeline(planned: Course[]): SemesterPlan[] {
       // Only rebalance if Fall is heavier
       if (fallHrs <= springHrs + 2) break
 
-      // Find the best course to move: pick the one that reduces score the most
-      let bestMoveIdx = -1
+      // Find the best move: single course or co-req pair
+      type Move = { indices: number[]; codes: string[] }
+      let bestMove: Move | null = null
       let bestMoveScore = scorePlan(fall, spring).score
+      const tried = new Set<string>() // avoid testing co-req pair twice
 
       for (let i = 0; i < fall.length; i++) {
         const candidate = fall[i]
+        if (tried.has(candidate.code)) continue
         if (neverMove.has(candidate.code)) continue
-        if (coReqAnchors.has(candidate.code)) continue
         if (springDependsOn(candidate.code, fallCodes, spring)) continue
 
+        // Check if this course has a co-req partner in Fall -- if so, move both
+        const partner = coReqPartner.get(candidate.code)
+        const moveIndices = [i]
+        const moveCodes = [candidate.code]
+
+        if (partner) {
+          const partnerIdx = fall.findIndex(c => c.code === partner)
+          if (partnerIdx >= 0) {
+            if (neverMove.has(partner)) continue
+            if (springDependsOn(partner, fallCodes, spring)) continue
+            moveIndices.push(partnerIdx)
+            moveCodes.push(partner)
+            tried.add(partner)
+          }
+        }
+        tried.add(candidate.code)
+
         // Simulate the move
-        const testFall = [...fall.slice(0, i), ...fall.slice(i + 1)]
-        const testSpring = [...spring, candidate]
+        const testFall = fall.filter((_, idx) => !moveIndices.includes(idx))
+        const testSpring = [...spring, ...moveIndices.map(idx => fall[idx])]
         const { score } = scorePlan(testFall, testSpring)
         if (score < bestMoveScore) {
           bestMoveScore = score
-          bestMoveIdx = i
+          bestMove = { indices: moveIndices, codes: moveCodes }
         }
       }
 
-      if (bestMoveIdx >= 0) {
-        const moved = fall.splice(bestMoveIdx, 1)[0]
-        spring.push(moved)
-        fallCodes.delete(moved.code)
-        springCodes.add(moved.code)
-        // Note: doneAfterFall still contains it, which is fine -- Spring is after Fall
+      if (bestMove) {
+        // Remove from Fall in reverse index order to preserve indices
+        const sorted = [...bestMove.indices].sort((a, b) => b - a)
+        for (const idx of sorted) {
+          const moved = fall.splice(idx, 1)[0]
+          spring.push(moved)
+          fallCodes.delete(moved.code)
+          springCodes.add(moved.code)
+        }
         improved = true
       }
     }
