@@ -866,6 +866,26 @@ function computeDegreeProgress(planned: Course[], courseResults: CourseResult[])
     return { code, name, hrs, status: "remaining", note }
   }
 
+  // ---- Pre-Business Core (34 hrs) ----
+  const preBusinessCoreCourses: DegreeCourseEntry[] = [
+    entry("ENGL 10103", "Composition I", 3),
+    entry("ENGL 10203", "Composition II", 3),
+    entry("MATH 20503", "Finite Mathematics", 3),
+    entry("MATH 22003", "Survey of Calculus", 3),
+    entry("ECON 21003", "Principles of Macroeconomics", 3),
+    entry("ECON 22003", "Principles of Microeconomics", 3),
+    entry("SPCH 10003", "Public Speaking", 3),
+    entry("ISYS 11203", "Business Application Knowledge", 3),
+    entry("BUSI 11101", "Freshman Business Connections", 1),
+    entry("BUSI 10303", "Data Analysis & Interpretation", 3),
+    entry("ISYS 20303", "Business Programming", 3),
+    entry("ACCT 20103", "Accounting Principles I", 3),
+    entry("ACCT 20203", "Accounting Principles II", 3),
+  ]
+  const pbcCompleted = preBusinessCoreCourses.filter(c => c.status === "completed").reduce((s, c) => s + c.hrs, 0)
+  const pbcTotal = 37 // per worksheet
+  const pbcAllDone = pbcCompleted >= pbcTotal
+
   // ---- Business Core ----
   const businessCoreCourses: DegreeCourseEntry[] = [
     entry("BLAW 20003", "Legal Environment of Business", 3),
@@ -1020,6 +1040,15 @@ function computeDegreeProgress(planned: Course[], courseResults: CourseResult[])
       label: "Total Credit Hours",
       detail: `Completed: ${STUDENT.hoursCompleted} + In Progress: ${STUDENT.hoursInProgress} + Planned: ${totalPlannedHrs} = ${hrsAfter} of 120 hours`,
       value: hrsAfter, total: 120, color: "bg-primary",
+    },
+    {
+      label: "Pre-Business Core (37 hrs)",
+      detail: pbcAllDone
+        ? "Complete -- all pre-business courses finished with C or better. GPA requirement met."
+        : `${pbcCompleted} of ${pbcTotal} hrs -- must complete all with C or better and 2.50 pre-business GPA`,
+      value: pbcCompleted, total: pbcTotal,
+      done: pbcAllDone, color: pbcAllDone ? "bg-emerald-500" : "bg-red-400",
+      courses: preBusinessCoreCourses,
     },
     {
       label: "Business Core (21 hrs)",
