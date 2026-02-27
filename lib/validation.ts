@@ -1264,42 +1264,58 @@ function generateSuggestion(
     return { title: "Action Required: Prerequisite issues must be resolved before registering.", body, severity: "red" }
   }
 
+  // -------------------------------------------------------------------
+  // Deduplicate: consolidate all issues into a single clean list.
+  // Group by topic so each concern is mentioned exactly once.
+  // -------------------------------------------------------------------
+  function deduplicateIssues(raw: { severity: SuggestionSeverity; message: string }[]): string[] {
+    const seen = new Set<string>()
+    const result: string[] = []
+
+    // Build keyword fingerprints so overlapping messages collapse
+    function fingerprint(msg: string): string {
+      const lower = msg.toLowerCase()
+      if (lower.includes("natural science") || (lower.includes("state min") && lower.includes("science"))) return "natural_science"
+      if (lower.includes("credit hour") || lower.includes("-hour plan") || (lower.includes("hours") && (lower.includes("below") || lower.includes("exceeds") || lower.includes("above")))) return "credit_hours"
+      if (lower.includes("finance minor") || lower.includes("finn 30103")) return "finance_minor"
+      if (lower.includes("concentration")) return "prefix_concentration"
+      if (lower.includes("conditional prerequisite") || lower.includes("in-progress courses with c")) return "conditional_prereqs"
+      if (lower.includes("unbalanced")) return "semester_balance"
+      // Fallback: use the message itself
+      return lower.slice(0, 60)
+    }
+
+    for (const issue of raw) {
+      const fp = fingerprint(issue.message)
+      if (!seen.has(fp)) {
+        seen.add(fp)
+        result.push(issue.message)
+      }
+    }
+    return result
+  }
+
+  // Add contextual notes that aren't already in issues
+  const contextNotes: { severity: SuggestionSeverity; message: string }[] = []
+  if (hasFinn30103 && !hasFinn30603 && !issues.some(i => i.message.toLowerCase().includes("finn 30103"))) {
+    contextNotes.push({ severity: "yellow", message: "FINN 30103 unlocks FINN 30603, FINN 36003, FINN 31003, and FINN 43203 for Fall 2027. Plan on 2 FINN courses per semester to complete the minor on time." })
+  }
+  if (econ43303Concurrent47403 && !issues.some(i => i.message.toLowerCase().includes("econ 43303") && i.message.toLowerCase().includes("econ 47403"))) {
+    contextNotes.push({ severity: "yellow", message: "ECON 43303 and ECON 47403 (4 hrs) are both in your Spring 2027 plan -- that\u2019s a heavy analytical load. Consider deferring one to balance semesters." })
+  }
+
+  const allItems = [...issues, ...contextNotes]
+
   // Red scenarios from non-prerequisite issues (load, timeline, etc.)
   if (overallSeverity === "red") {
-    const redIssues = issues.filter(i => i.severity === "red")
-    const body: string[] = redIssues.map(i => i.message)
-    const yellowIssues = issues.filter(i => i.severity === "yellow")
-    if (yellowIssues.length > 0) {
-      body.push(`Additionally, ${yellowIssues.length} item${yellowIssues.length > 1 ? "s" : ""} need attention: ${yellowIssues.map(i => i.message).join("; ")}`)
-    }
+    const body = deduplicateIssues(allItems)
+    if (body.length === 0) body.push("Critical issues were found in your plan. Review the flagged items above.")
     return { title: "Action Required: Critical issues found in your plan.", body, severity: "red" }
   }
 
   // Yellow scenarios
   if (overallSeverity === "yellow") {
-    const body: string[] = []
-    if (hasFinn30103 && !hasFinn30603) {
-      body.push("FINN 30103 unlocks FINN 30603, FINN 36003, FINN 31003, and FINN 43203 for Fall 2027. You still need 12 more Finance minor hours across 2 semesters -- plan on 2 FINN courses per semester.")
-    }
-    if (econ43303Concurrent47403) {
-      body.push("ECON 43303 and ECON 47403 (4 hrs) are both in your Spring 2027 plan -- that\u2019s a heavy analytical load. The 8-semester plan places ECON 43303 in Fall Year 4. Consider deferring one to balance semesters.")
-    }
-    if (sciProgress && sciProgress.value < 20) {
-      body.push("Don\u2019t forget: Natural Science lecture + lab (4 hrs) is still needed for State Minimum Core. Scheduling this sooner gives you more flexibility later.")
-    }
-    if (totalHrs > STANDARD_MAX) {
-      body.push(`Your ${totalHrs}-hour plan exceeds the standard 17-hour limit. Make sure you have advisor approval.`)
-    }
-    if (totalHrs < STANDARD_MIN && totalHrs > 0) {
-      body.push(`Your ${totalHrs}-hour plan is below the standard 15-hour minimum. This could delay your graduation timeline -- consider adding a course if possible.`)
-    }
-    // Surface any remaining yellow issues not already covered
-    const yellowMessages = issues.filter(i => i.severity === "yellow").map(i => i.message)
-    for (const msg of yellowMessages) {
-      if (!body.some(b => b.includes(msg.slice(0, 30)))) {
-        body.push(msg)
-      }
-    }
+    const body = deduplicateIssues(allItems)
     if (body.length === 0) {
       body.push("Your plan has some minor concerns (see conditional flags above) but can proceed if in-progress courses are completed successfully.")
     }
