@@ -11,18 +11,10 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Check } from "lucide-react"
 import type { Course } from "@/lib/validation"
 
-const defaultPlanned: Course[] = [
-  { code: "ECON 31303", name: "Intermediate Macroeconomics", hrs: 3, cat: "Economics Major" },
-  { code: "ECON 47403", name: "Introduction to Econometrics", hrs: 4, cat: "Economics Major" },
-  { code: "SEVI 30103", name: "Strategic Management", hrs: 3, cat: "Business Core" },
-  { code: "ECON 43303", name: "Economics of Organizations", hrs: 3, cat: "Economics Major" },
-  { code: "FINN 30603", name: "Investments", hrs: 3, cat: "Finance Minor" },
-]
-
 export default function Home() {
   const [screen, setScreen] = useState(1)
   const [loading, setLoading] = useState(false)
-  const [planned, setPlanned] = useState<Course[]>(defaultPlanned)
+  const [planned, setPlanned] = useState<Course[]>([])
 
   const goTo = (s: number) => setScreen(s)
 

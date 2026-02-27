@@ -58,17 +58,20 @@ const catalogue: Course[] = [
   { code: "ECON 30303", name: "Intermediate Microeconomics", hrs: 3, cat: "Economics Major (Required)" },
   { code: "FINN 20403", name: "Principles of Finance", hrs: 3, cat: "Business Core" },
   { code: "MKTG 34303", name: "Introduction to Marketing", hrs: 3, cat: "Business Core" },
-  // Science courses for State Minimum Core
-  { code: "BIOL 11003", name: "Biology for Majors", hrs: 3, cat: "State Minimum Core (Science)" },
-  { code: "BIOL 11001", name: "Biology for Majors Lab", hrs: 1, cat: "State Minimum Core (Science Lab)" },
-  { code: "CHEM 10003", name: "Fundamentals of Chemistry", hrs: 3, cat: "State Minimum Core (Science)" },
-  { code: "CHEM 10001", name: "Fundamentals of Chemistry Lab", hrs: 1, cat: "State Minimum Core (Science Lab)" },
-  { code: "PHYS 10003", name: "Intro to Physics", hrs: 3, cat: "State Minimum Core (Science)" },
-  { code: "PHYS 10001", name: "Intro to Physics Lab", hrs: 1, cat: "State Minimum Core (Science Lab)" },
+  // Science courses for State Minimum Core (less intensive options)
+  { code: "ASTR 10003", name: "Survey of Astronomy", hrs: 3, cat: "State Minimum Core (Science)" },
+  { code: "ASTR 10001", name: "Survey of Astronomy Lab", hrs: 1, cat: "State Minimum Core (Science Lab)" },
+  { code: "ENSC 10003", name: "Intro to Environmental Science", hrs: 3, cat: "State Minimum Core (Science)" },
+  { code: "ENSC 10001", name: "Environmental Science Lab", hrs: 1, cat: "State Minimum Core (Science Lab)" },
+  { code: "PHYS 10103", name: "Physics in the Modern World", hrs: 3, cat: "State Minimum Core (Science)" },
+  { code: "PHYS 10101", name: "Physics in the Modern World Lab", hrs: 1, cat: "State Minimum Core (Science Lab)" },
   // General electives
   { code: "COMM 13003", name: "Interpersonal Communication", hrs: 3, cat: "General Elective" },
   { code: "PSYC 21003", name: "Abnormal Psychology", hrs: 3, cat: "General Elective" },
   { code: "SOCI 20003", name: "Intro to Sociology", hrs: 3, cat: "General Elective" },
+  { code: "PHIL 32003", name: "Business Ethics", hrs: 3, cat: "General Elective" },
+  { code: "GEOS 10003", name: "World Regional Geography", hrs: 3, cat: "General Elective" },
+  { code: "ANTH 10003", name: "Intro to Anthropology", hrs: 3, cat: "General Elective" },
 ]
 
 /* ------------------------------------------------------------------ */
@@ -95,7 +98,7 @@ export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
   const searchRef = useRef<HTMLDivElement>(null)
 
   const totalHrs = planned.reduce((acc, c) => acc + c.hrs, 0)
-  const plannedCodes = new Set(planned.map((c) => c.code))
+  const plannedCodes = useMemo(() => new Set(planned.map((c) => c.code)), [planned])
 
   // Build guided recommendations (recomputed when planned changes)
   const groups = useMemo(() => buildRecommendations(planned), [planned])
@@ -119,7 +122,7 @@ export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
               c.name.toLowerCase().includes(query.toLowerCase()) ||
               c.cat.toLowerCase().includes(query.toLowerCase()))
         )
-      : catalogue.filter((c) => !plannedCodes.has(c.code))
+      : []
 
   const removeCourse = (code: string) => setPlanned((prev) => prev.filter((c) => c.code !== code))
 
@@ -239,27 +242,23 @@ export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
                 onFocus={() => setShowResults(true)}
               />
             </div>
-            {showResults && (
+            {showResults && searchResults.length > 0 && (
               <div className="absolute left-0 right-0 top-full z-30 mt-1.5 max-h-72 overflow-y-auto rounded-xl border bg-card shadow-xl">
-                {searchResults.length === 0 ? (
-                  <div className="px-4 py-6 text-center text-sm text-muted-foreground">No matching courses found</div>
-                ) : (
-                  searchResults.map((c) => (
-                    <button
-                      key={c.code}
-                      onClick={() => addCourse(c)}
-                      className="flex w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-muted/50"
-                    >
-                      <Plus className="h-4 w-4 shrink-0 text-primary" />
-                      <Badge variant="secondary" className="shrink-0 font-mono text-xs">{c.code}</Badge>
-                      <div className="flex flex-1 flex-col">
-                        <span className="text-sm font-medium text-foreground">{c.name}</span>
-                        <span className="text-[11px] text-muted-foreground">{c.cat}</span>
-                      </div>
-                      <span className="shrink-0 text-xs font-medium text-muted-foreground">{c.hrs} hrs</span>
-                    </button>
-                  ))
-                )}
+                {searchResults.map((c) => (
+                  <button
+                    key={c.code}
+                    onClick={() => addCourse(c)}
+                    className="flex w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-muted/50"
+                  >
+                    <Plus className="h-4 w-4 shrink-0 text-primary" />
+                    <Badge variant="secondary" className="shrink-0 font-mono text-xs">{c.code}</Badge>
+                    <div className="flex flex-1 flex-col">
+                      <span className="text-sm font-medium text-foreground">{c.name}</span>
+                      <span className="text-[11px] text-muted-foreground">{c.cat}</span>
+                    </div>
+                    <span className="shrink-0 text-xs font-medium text-muted-foreground">{c.hrs} hrs</span>
+                  </button>
+                ))}
               </div>
             )}
           </div>
@@ -284,8 +283,6 @@ export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
               plannedCodes={plannedCodes}
               onAdd={addFromRec}
               onAddPair={addPair}
-              catalogue={catalogue}
-              onAddCourse={addCourse}
             />
           ))}
         </div>
@@ -381,49 +378,27 @@ function RequirementGroupCard({
   plannedCodes,
   onAdd,
   onAddPair,
-  catalogue,
-  onAddCourse,
 }: {
   group: RequirementGroup
   plannedCodes: Set<string>
   onAdd: (rec: RecommendedCourse) => void
   onAddPair: (lecture: RecommendedCourse, lab: RecommendedCourse) => void
-  catalogue: Course[]
-  onAddCourse: (c: Course) => void
 }) {
   const [expanded, setExpanded] = useState(
     group.id === "business-core" || group.id === "econ-major-required" || group.id === "finance-minor"
   )
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [searchQuery, setSearchQuery] = useState("")
-  const groupSearchRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (groupSearchRef.current && !groupSearchRef.current.contains(e.target as Node)) {
-        setSearchOpen(false)
-      }
-    }
-    document.addEventListener("mousedown", handleClick)
-    return () => document.removeEventListener("mousedown", handleClick)
-  }, [])
 
   const plannedInGroup = group.courses.filter(c => plannedCodes.has(c.code)).length
-  const pct = group.hoursNeeded > 0 ? Math.min(100, Math.round((group.hoursCompleted / (group.hoursCompleted + group.hoursNeeded)) * 100)) : 100
+  const pct = group.hoursNeeded > 0
+    ? Math.min(100, Math.round((group.hoursCompleted / (group.hoursCompleted + group.hoursNeeded)) * 100))
+    : 100
 
-  const groupSearchResults = searchQuery.trim().length > 0
-    ? catalogue.filter(c =>
-        !plannedCodes.has(c.code) &&
-        (c.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-         c.name.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
-    : []
-
-  const eligibleCourses = group.courses.filter(c => c.eligible && !plannedCodes.has(c.code) && !c.linkedLecture)
+  // Filter courses into buckets -- do NOT exclude planned courses (they show green)
+  const allEligible = group.courses.filter(c => c.eligible && !c.linkedLecture)
   const ineligibleCourses = group.courses.filter(c => !c.eligible && !plannedCodes.has(c.code))
-  const critical = eligibleCourses.filter(c => c.priority === "critical")
-  const recommended = eligibleCourses.filter(c => c.priority === "recommended")
-  const options = eligibleCourses.filter(c => c.priority === "option")
+  const critical = allEligible.filter(c => c.priority === "critical")
+  const recommended = allEligible.filter(c => c.priority === "recommended")
+  const options = allEligible.filter(c => c.priority === "option")
 
   const isScience = group.id === "state-min-core" && group.sciencePairs && group.sciencePairs.length > 0
 
@@ -446,7 +421,7 @@ function RequirementGroupCard({
           <div className="flex items-center gap-3">
             <div className="h-1.5 max-w-32 flex-1 overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full rounded-full bg-primary/70 transition-all"
+                className="h-full rounded-full bg-primary/70 transition-all duration-300"
                 style={{ width: `${pct}%` }}
               />
             </div>
@@ -470,20 +445,17 @@ function RequirementGroupCard({
           )}
 
           {/* ======================================================== */}
-          {/* SCIENCE PAIRS - special rendering with auto-link          */}
+          {/* SCIENCE PAIRS - auto-linked lecture+lab buttons            */}
           {/* ======================================================== */}
           {isScience && group.sciencePairs!.map((pair) => {
-            const lectureAdded = plannedCodes.has(pair.lecture.code)
-            const labAdded = plannedCodes.has(pair.lab.code)
-            const pairAdded = lectureAdded && labAdded
+            const pairAdded = plannedCodes.has(pair.lecture.code) && plannedCodes.has(pair.lab.code)
             return (
               <button
                 key={pair.lecture.code}
-                onClick={() => onAddPair(pair.lecture, pair.lab)}
-                disabled={pairAdded}
+                onClick={() => { if (!pairAdded) onAddPair(pair.lecture, pair.lab) }}
                 className={`flex flex-col gap-2 rounded-lg border-2 px-4 py-3.5 text-left transition-all ${
                   pairAdded
-                    ? "border-emerald-200 bg-emerald-50/50 opacity-80"
+                    ? "border-emerald-300 bg-emerald-50"
                     : pair.lecture.priority === "recommended"
                       ? "border-primary/20 bg-primary/[0.03] hover:border-primary/40 hover:bg-primary/[0.06]"
                       : "border-border bg-muted/20 hover:border-muted-foreground/20 hover:bg-muted/40"
@@ -491,21 +463,21 @@ function RequirementGroupCard({
               >
                 <div className="flex items-center gap-2">
                   {pairAdded ? (
-                    <CheckCircle className="h-4 w-4 shrink-0 text-emerald-500" />
+                    <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600" />
                   ) : (
                     <Plus className="h-4 w-4 shrink-0 text-primary" />
                   )}
                   <div className="flex flex-1 flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="text-sm font-semibold text-foreground">{pair.lecture.code}</span>
-                    <span className="text-sm text-foreground">{pair.lecture.name}</span>
+                    <span className={`text-sm font-semibold ${pairAdded ? "text-emerald-800" : "text-foreground"}`}>{pair.lecture.code}</span>
+                    <span className={`text-sm ${pairAdded ? "text-emerald-700" : "text-foreground"}`}>{pair.lecture.name}</span>
                     <span className="text-[10px] text-muted-foreground">+</span>
-                    <span className="text-sm font-semibold text-foreground">{pair.lab.code}</span>
-                    <span className="text-sm text-foreground">{pair.lab.name}</span>
+                    <span className={`text-sm font-semibold ${pairAdded ? "text-emerald-800" : "text-foreground"}`}>{pair.lab.code}</span>
+                    <span className={`text-sm ${pairAdded ? "text-emerald-700" : "text-foreground"}`}>{pair.lab.name}</span>
                   </div>
                   <Badge
                     className={`shrink-0 text-[10px] font-bold ${
                       pairAdded
-                        ? "border-emerald-200 bg-emerald-100 text-emerald-700"
+                        ? "border-emerald-300 bg-emerald-100 text-emerald-700"
                         : "border-primary/20 bg-primary/10 text-primary"
                     }`}
                   >
@@ -513,13 +485,8 @@ function RequirementGroupCard({
                   </Badge>
                 </div>
                 {pair.lecture.note && (
-                  <p className="pl-6 text-[11px] leading-relaxed text-muted-foreground">
-                    {pair.lecture.note}
-                  </p>
-                )}
-                {pairAdded && (
-                  <p className="pl-6 text-[11px] font-medium text-emerald-600">
-                    Lecture + lab added to your schedule
+                  <p className={`pl-6 text-[11px] leading-relaxed ${pairAdded ? "text-emerald-600" : "text-muted-foreground"}`}>
+                    {pairAdded ? "Added to your schedule (lecture + lab)" : pair.lecture.note}
                   </p>
                 )}
               </button>
@@ -536,33 +503,31 @@ function RequirementGroupCard({
                 return (
                   <button
                     key={c.code}
-                    onClick={() => onAdd(c)}
-                    disabled={added}
+                    onClick={() => { if (!added) onAdd(c) }}
                     className={`flex flex-col gap-1.5 rounded-lg border-2 px-4 py-3.5 text-left transition-all ${
                       added
-                        ? "border-emerald-200 bg-emerald-50/50 opacity-80"
+                        ? "border-emerald-300 bg-emerald-50"
                         : "border-primary/20 bg-primary/[0.04] hover:border-primary/40 hover:bg-primary/[0.08]"
                     }`}
                   >
                     <div className="flex items-center gap-2">
                       {added ? (
-                        <CheckCircle className="h-4 w-4 shrink-0 text-emerald-500" />
+                        <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600" />
                       ) : (
                         <Sparkles className="h-4 w-4 shrink-0 text-primary" />
                       )}
-                      <span className="text-sm font-semibold text-foreground">{c.code}</span>
-                      <span className="text-sm text-foreground">{c.name}</span>
+                      <span className={`text-sm font-semibold ${added ? "text-emerald-800" : "text-foreground"}`}>{c.code}</span>
+                      <span className={`text-sm ${added ? "text-emerald-700" : "text-foreground"}`}>{c.name}</span>
                       <Badge className={`ml-auto shrink-0 text-[10px] font-bold ${
                         added
-                          ? "border-emerald-200 bg-emerald-100 text-emerald-700"
+                          ? "border-emerald-300 bg-emerald-100 text-emerald-700"
                           : "border-primary/20 bg-primary/10 text-primary"
                       }`}>{c.hrs} hrs</Badge>
                     </div>
                     {c.note && (
-                      <p className="pl-6 text-[11px] leading-relaxed text-muted-foreground">{c.note}</p>
-                    )}
-                    {added && (
-                      <p className="pl-6 text-[11px] font-medium text-emerald-600">Added to your schedule</p>
+                      <p className={`pl-6 text-[11px] leading-relaxed ${added ? "text-emerald-600" : "text-muted-foreground"}`}>
+                        {added ? "Added to your schedule" : c.note}
+                      </p>
                     )}
                   </button>
                 )
@@ -571,7 +536,7 @@ function RequirementGroupCard({
           )}
 
           {/* ======================================================== */}
-          {/* RECOMMENDED courses - card buttons with rationale         */}
+          {/* RECOMMENDED courses - selectable cards with rationale     */}
           {/* ======================================================== */}
           {!isScience && recommended.length > 0 && (
             <div className="flex flex-col gap-1.5">
@@ -579,31 +544,32 @@ function RequirementGroupCard({
                 Recommended
               </span>
               <div className="flex flex-col gap-2">
-                {recommended.map(c => {
+                {recommended.slice(0, 8).map(c => {
                   const added = plannedCodes.has(c.code)
                   return (
                     <button
                       key={c.code}
-                      onClick={() => onAdd(c)}
-                      disabled={added}
+                      onClick={() => { if (!added) onAdd(c) }}
                       className={`flex flex-col gap-1 rounded-lg border px-3.5 py-3 text-left transition-all ${
                         added
-                          ? "border-emerald-200 bg-emerald-50/50 opacity-80"
+                          ? "border-emerald-300 bg-emerald-50"
                           : "bg-card hover:border-primary/30 hover:shadow-sm"
                       }`}
                     >
                       <div className="flex items-center gap-2">
                         {added ? (
-                          <CheckCircle className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                          <CheckCircle className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
                         ) : (
                           <Plus className="h-3.5 w-3.5 shrink-0 text-primary" />
                         )}
-                        <span className="text-xs font-semibold text-foreground">{c.code}</span>
-                        <span className="text-xs text-foreground">{c.name}</span>
-                        <span className="ml-auto text-[10px] font-medium text-muted-foreground">{c.hrs} hrs</span>
+                        <span className={`text-xs font-semibold ${added ? "text-emerald-800" : "text-foreground"}`}>{c.code}</span>
+                        <span className={`text-xs ${added ? "text-emerald-700" : "text-foreground"}`}>{c.name}</span>
+                        <span className={`ml-auto text-[10px] font-medium ${added ? "text-emerald-600" : "text-muted-foreground"}`}>{c.hrs} hrs</span>
                       </div>
                       {c.note && (
-                        <p className="pl-[1.375rem] text-[10px] leading-relaxed text-muted-foreground">{c.note}</p>
+                        <p className={`pl-[1.375rem] text-[10px] leading-relaxed ${added ? "text-emerald-600" : "text-muted-foreground"}`}>
+                          {added ? "Added to your schedule" : c.note}
+                        </p>
                       )}
                     </button>
                   )
@@ -613,7 +579,7 @@ function RequirementGroupCard({
           )}
 
           {/* ======================================================== */}
-          {/* OPTION courses - compact chips                            */}
+          {/* OPTION courses - up to 8 selectable boxes                 */}
           {/* ======================================================== */}
           {!isScience && options.length > 0 && (
             <div className="flex flex-col gap-1.5">
@@ -621,31 +587,32 @@ function RequirementGroupCard({
                 Other Options
               </span>
               <div className="flex flex-col gap-1.5">
-                {options.slice(0, 6).map(c => {
+                {options.slice(0, 8).map(c => {
                   const added = plannedCodes.has(c.code)
                   return (
                     <button
                       key={c.code}
-                      onClick={() => onAdd(c)}
-                      disabled={added}
+                      onClick={() => { if (!added) onAdd(c) }}
                       className={`flex flex-col gap-0.5 rounded-md border px-3 py-2 text-left transition-colors ${
                         added
-                          ? "border-emerald-200 bg-emerald-50/40 opacity-70"
+                          ? "border-emerald-300 bg-emerald-50"
                           : "bg-muted/30 hover:bg-muted/60"
                       }`}
                     >
                       <div className="flex items-center gap-1.5">
                         {added ? (
-                          <CheckCircle className="h-3 w-3 shrink-0 text-emerald-500" />
+                          <CheckCircle className="h-3 w-3 shrink-0 text-emerald-600" />
                         ) : (
                           <Plus className="h-3 w-3 shrink-0 text-muted-foreground" />
                         )}
-                        <span className="text-[11px] font-medium text-foreground">{c.code}</span>
-                        <span className="text-[10px] text-muted-foreground">{c.name}</span>
-                        <span className="ml-auto text-[10px] text-muted-foreground">{c.hrs}h</span>
+                        <span className={`text-[11px] font-medium ${added ? "text-emerald-800" : "text-foreground"}`}>{c.code}</span>
+                        <span className={`text-[10px] ${added ? "text-emerald-700" : "text-muted-foreground"}`}>{c.name}</span>
+                        <span className={`ml-auto text-[10px] ${added ? "text-emerald-600" : "text-muted-foreground"}`}>{c.hrs}h</span>
                       </div>
                       {c.note && (
-                        <p className="pl-[1.125rem] text-[10px] leading-snug text-muted-foreground">{c.note}</p>
+                        <p className={`pl-[1.125rem] text-[10px] leading-snug ${added ? "text-emerald-600" : "text-muted-foreground"}`}>
+                          {added ? "Added to your schedule" : c.note}
+                        </p>
                       )}
                     </button>
                   )
@@ -662,7 +629,7 @@ function RequirementGroupCard({
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Not Yet Eligible
               </span>
-              {ineligibleCourses.slice(0, 3).map(c => (
+              {ineligibleCourses.map(c => (
                 <div
                   key={c.code}
                   className="flex flex-col gap-0.5 rounded-md border border-dashed bg-muted/20 px-3 py-2 opacity-70"
@@ -682,44 +649,6 @@ function RequirementGroupCard({
                   )}
                 </div>
               ))}
-            </div>
-          )}
-
-          {/* ======================================================== */}
-          {/* Group-specific search bar                                 */}
-          {/* ======================================================== */}
-          {group.type === "choose" && (
-            <div ref={groupSearchRef} className="relative mt-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder={`Search for any course that meets ${group.label}...`}
-                  className="h-9 pl-9 pr-3 text-xs shadow-sm"
-                  value={searchQuery}
-                  onChange={(e) => { setSearchQuery(e.target.value); setSearchOpen(true) }}
-                  onFocus={() => setSearchOpen(true)}
-                />
-              </div>
-              {searchOpen && groupSearchResults.length > 0 && (
-                <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-48 overflow-y-auto rounded-lg border bg-card shadow-lg">
-                  {groupSearchResults.map(c => (
-                    <button
-                      key={c.code}
-                      onClick={() => {
-                        onAddCourse(c)
-                        setSearchQuery("")
-                        setSearchOpen(false)
-                      }}
-                      className="flex w-full items-center gap-2.5 border-b px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-muted/50"
-                    >
-                      <Plus className="h-3.5 w-3.5 shrink-0 text-primary" />
-                      <Badge variant="secondary" className="shrink-0 font-mono text-[10px]">{c.code}</Badge>
-                      <span className="flex-1 text-xs text-foreground">{c.name}</span>
-                      <span className="text-[10px] text-muted-foreground">{c.hrs}h</span>
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
           )}
         </div>

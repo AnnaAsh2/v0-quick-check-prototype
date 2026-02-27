@@ -1103,11 +1103,12 @@ export function buildRecommendations(planned: Course[]): RequirementGroup[] {
   // ================================================================
   if (!taken("SEVI 30103")) {
     const e = eligible("SEVI 30103")
+    const bcPlannedHrs = plannedCodes.has("SEVI 30103") ? 3 : 0
     groups.push({
       id: "business-core",
       label: "Business Core",
       hoursNeeded: 3,
-      hoursCompleted: 18,
+      hoursCompleted: 18 + bcPlannedHrs,
       type: "single",
       description: "SEVI 30103 is the capstone course and your last remaining Business Core requirement. The 8-semester plan places it in Spring Year 3.",
       courses: [{
@@ -1128,12 +1129,13 @@ export function buildRecommendations(planned: Course[]): RequirementGroup[] {
     { code: "ECON 47403", name: "Introduction to Econometrics", hrs: 4, note: "Core quantitative methods course (4 credit hours). Essential for economic analysis careers. The 8-semester plan places this in Spring Year 3. Note: 4+1 students can take ECON 57403 instead." },
   ]
   const econRequiredRemaining = econRequired.filter(c => !taken(c.code))
+  const econReqPlannedHrs = econRequired.filter(c => plannedCodes.has(c.code)).reduce((s, c) => s + c.hrs, 0)
   if (econRequiredRemaining.length > 0) {
     groups.push({
       id: "econ-major-required",
       label: "Economics Major (Required)",
       hoursNeeded: econRequiredRemaining.reduce((s, c) => s + c.hrs, 0),
-      hoursCompleted: 6, // ECON 30303 (3, IP) + ECON 34303 (3, IP)
+      hoursCompleted: 6 + econReqPlannedHrs,
       type: econRequiredRemaining.length === 1 ? "single" : "choose",
       description: "Business Economics concentration requires 24 hours. ECON 30303 and ECON 34303 are in progress. The 8-semester plan recommends 2 upper-level ECON courses per semester for Years 3-4.",
       courses: econRequiredRemaining.map(c => {
@@ -1165,12 +1167,13 @@ export function buildRecommendations(planned: Course[]): RequirementGroup[] {
     { code: "ECON 38503", name: "Emerging Markets", hrs: 3 },
   ]
   const econElecRemaining = econElectiveOptions.filter(c => !taken(c.code))
+  const econElecPlannedHrs = econElectiveOptions.filter(c => plannedCodes.has(c.code)).reduce((s, c) => s + c.hrs, 0)
   if (econElecRemaining.length > 0) {
     groups.push({
       id: "econ-major-elective",
       label: "Economics Major (Electives)",
       hoursNeeded: 9,
-      hoursCompleted: 3, // ECON 34303 IP counts
+      hoursCompleted: 3 + econElecPlannedHrs,
       type: "choose",
       description: "Choose from ECON 3000/4000-level courses. ECON 34303 (Money & Banking, in progress) counts toward this. Need approximately 6 more hours across remaining semesters.",
       courses: econElecRemaining.map(c => {
@@ -1199,12 +1202,13 @@ export function buildRecommendations(planned: Course[]): RequirementGroup[] {
     { code: "FINN 36203", name: "Risk Management", hrs: 3, note: "Insurance/Real Estate track. Good complement to Personal Financial Management." },
   ]
   const finMinorRemaining = finMinorCourses.filter(c => !taken(c.code))
+  const finPlannedHrs = finMinorCourses.filter(c => plannedCodes.has(c.code)).reduce((s, c) => s + c.hrs, 0)
   if (finMinorRemaining.length > 0) {
     groups.push({
       id: "finance-minor",
       label: "Finance Minor",
       hoursNeeded: 15,
-      hoursCompleted: 0,
+      hoursCompleted: 0 + finPlannedHrs,
       type: "choose",
       description: "Requires 15 hours. FINN 30103 is required and must be taken first. You have 3 semesters remaining -- start now. The 8-semester plan recommends 2 FINN courses per semester starting Spring Year 3.",
       courses: finMinorRemaining.map(c => {
@@ -1233,12 +1237,13 @@ export function buildRecommendations(planned: Course[]): RequirementGroup[] {
     { code: "SCMT 34403", name: "Transportation & Distribution Mgmt", hrs: 3 },
   ]
   const jrSrRemaining = jrSrOptions.filter(c => !taken(c.code))
+  const jrSrPlannedHrs = jrSrOptions.filter(c => plannedCodes.has(c.code)).reduce((s, c) => s + c.hrs, 0)
   if (jrSrRemaining.length > 0) {
     groups.push({
       id: "jrsr-electives",
       label: "Jr/Sr Business Electives",
       hoursNeeded: 12,
-      hoursCompleted: 0,
+      hoursCompleted: 0 + jrSrPlannedHrs,
       type: "choose",
       description: "Any 3000 or 4000-level business course (ACCT, BLAW, ECON, FINN, ISYS, MGMT, MKTG, SCMT, SEVI, BUSI) except ECON 30503, ECON 30603, and MGMT 35603. Finance minor courses also count here.",
       courses: jrSrRemaining.map(c => {
@@ -1262,44 +1267,44 @@ export function buildRecommendations(planned: Course[]): RequirementGroup[] {
     const sciencePairs: { lecture: RecommendedCourse; lab: RecommendedCourse }[] = [
       {
         lecture: {
-          code: "BIOL 11003", name: "Biology for Majors", hrs: 3,
+          code: "ASTR 10003", name: "Survey of Astronomy", hrs: 3,
           eligible: true, priority: "recommended",
-          note: "Broad science foundation. Pairs with any biology lab. Good fit for business students who want a general science option.",
-          linkedLab: "BIOL 11001",
+          note: "Most popular science choice for business students. Conceptual and accessible -- no advanced math required. Covers the solar system, stars, and galaxies in a highly engaging format.",
+          linkedLab: "ASTR 10001",
         },
         lab: {
-          code: "BIOL 11001", name: "Biology for Majors Lab", hrs: 1,
+          code: "ASTR 10001", name: "Survey of Astronomy Lab", hrs: 1,
           eligible: true, priority: "recommended",
-          note: "Matching lab for BIOL 11003. Selected automatically when the lecture is chosen.",
-          linkedLecture: "BIOL 11003",
+          note: "Hands-on lab paired with ASTR 10003. Observational exercises and sky mapping. Selected automatically with the lecture.",
+          linkedLecture: "ASTR 10003",
         },
       },
       {
         lecture: {
-          code: "CHEM 10003", name: "Fundamentals of Chemistry", hrs: 3,
+          code: "ENSC 10003", name: "Intro to Environmental Science", hrs: 3,
           eligible: true, priority: "recommended",
-          note: "Accessible chemistry option. No prerequisite. Useful if you want exposure to quantitative science beyond geology.",
-          linkedLab: "CHEM 10001",
+          note: "Covers ecosystems, sustainability, and environmental policy. Relevant to business ethics and corporate responsibility. Straightforward coursework with no prerequisites.",
+          linkedLab: "ENSC 10001",
         },
         lab: {
-          code: "CHEM 10001", name: "Fundamentals of Chemistry Lab", hrs: 1,
+          code: "ENSC 10001", name: "Environmental Science Lab", hrs: 1,
           eligible: true, priority: "recommended",
-          note: "Matching lab for CHEM 10003. Selected automatically when the lecture is chosen.",
-          linkedLecture: "CHEM 10003",
+          note: "Field-based lab paired with ENSC 10003. Practical environmental sampling exercises. Selected automatically with the lecture.",
+          linkedLecture: "ENSC 10003",
         },
       },
       {
         lecture: {
-          code: "PHYS 10003", name: "Intro to Physics", hrs: 3,
+          code: "PHYS 10103", name: "Physics in the Modern World", hrs: 3,
           eligible: true, priority: "option",
-          note: "More quantitative. Good complement to economics/finance background. Requires comfort with math concepts.",
-          linkedLab: "PHYS 10001",
+          note: "Conceptual physics designed for non-science majors. Covers everyday phenomena (energy, waves, electronics) without calculus. Lighter than Intro to Physics.",
+          linkedLab: "PHYS 10101",
         },
         lab: {
-          code: "PHYS 10001", name: "Intro to Physics Lab", hrs: 1,
+          code: "PHYS 10101", name: "Physics in the Modern World Lab", hrs: 1,
           eligible: true, priority: "option",
-          note: "Matching lab for PHYS 10003. Selected automatically when the lecture is chosen.",
-          linkedLecture: "PHYS 10003",
+          note: "Demonstration-based lab paired with PHYS 10103. Interactive experiments on mechanics and optics. Selected automatically with the lecture.",
+          linkedLecture: "PHYS 10103",
         },
       },
     ]
@@ -1313,12 +1318,13 @@ export function buildRecommendations(planned: Course[]): RequirementGroup[] {
       }
     }
 
+    const sciPlannedHrs = courses.filter(c => plannedCodes.has(c.code)).reduce((s, c) => s + c.hrs, 0)
     if (courses.length > 0) {
       groups.push({
         id: "state-min-core",
         label: "State Minimum Core",
         hoursNeeded: 4,
-        hoursCompleted: 16,
+        hoursCompleted: 16 + sciPlannedHrs,
         type: "choose",
         description: "16 of 20 hours completed (GEOL 11103/11101, PSYC 20003, ARHS 10003, PHIL 21003 IP, HIST 20003 IP). You still need a Natural Science lecture + matching lab (4 hrs total). Selecting a lecture automatically adds the matching lab.",
         courses,
@@ -1332,17 +1338,21 @@ export function buildRecommendations(planned: Course[]): RequirementGroup[] {
   // ================================================================
   {
     const genElecOptions: { code: string; name: string; hrs: number; note?: string }[] = [
-      { code: "COMM 13003", name: "Interpersonal Communication", hrs: 3 },
-      { code: "PSYC 21003", name: "Abnormal Psychology", hrs: 3 },
-      { code: "SOCI 20003", name: "Intro to Sociology", hrs: 3 },
+      { code: "COMM 13003", name: "Interpersonal Communication", hrs: 3, note: "Builds on COMM 12003 (completed). Practical communication skills directly useful in business settings." },
+      { code: "PSYC 21003", name: "Abnormal Psychology", hrs: 3, note: "Popular elective with manageable workload. Interesting content on mental health and behavioral patterns." },
+      { code: "SOCI 20003", name: "Intro to Sociology", hrs: 3, note: "Broad social science elective. Covers group dynamics and institutions -- complements economics well." },
+      { code: "PHIL 32003", name: "Business Ethics", hrs: 3, note: "Directly relevant to your business degree. Covers ethical frameworks for corporate decision-making." },
+      { code: "GEOS 10003", name: "World Regional Geography", hrs: 3, note: "Covers global economic regions and cultural geography. Complements international economics coursework." },
+      { code: "ANTH 10003", name: "Intro to Anthropology", hrs: 3, note: "Explores human cultures and societies. Light workload, interesting perspective for business students." },
     ]
     const remaining = genElecOptions.filter(c => !taken(c.code))
+    const genPlannedHrs = genElecOptions.filter(c => plannedCodes.has(c.code)).reduce((s, c) => s + c.hrs, 0)
     if (remaining.length > 0) {
       groups.push({
         id: "gen-electives",
         label: "General Electives",
         hoursNeeded: 3,
-        hoursCompleted: 3,
+        hoursCompleted: 3 + genPlannedHrs,
         type: "choose",
         description: "3 of 6 hours completed (COMM 12003). Max 6 hours of business courses and 3 hours of PEAC or DANC courses. Can schedule for a lighter semester.",
         courses: remaining.map(c => ({
