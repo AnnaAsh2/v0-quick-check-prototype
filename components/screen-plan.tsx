@@ -144,13 +144,20 @@ export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
 
   const addCourse = (course: Course) => {
     setPlanned((prev) => {
+      const existing = new Set(prev.map(c => c.code))
       const next = [...prev]
-      if (!plannedCodes.has(course.code)) next.push(course)
+      if (!existing.has(course.code)) {
+        next.push(course)
+        existing.add(course.code)
+      }
       // Auto-pair science lecture <-> lab
       const linked = scienceLinks[course.code]
-      if (linked && !plannedCodes.has(linked)) {
+      if (linked && !existing.has(linked)) {
         const pair = catalogue.find(c => c.code === linked)
-        if (pair) next.push(pair)
+        if (pair) {
+          next.push(pair)
+          existing.add(pair.code)
+        }
       }
       return next
     })
@@ -159,10 +166,23 @@ export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
   }
 
   const addFromRec = (rec: RecommendedCourse) => {
-    const existing = catalogue.find(c => c.code === rec.code)
-    if (existing && !plannedCodes.has(existing.code)) {
-      setPlanned(prev => [...prev, existing])
-    }
+    const course = catalogue.find(c => c.code === rec.code)
+    if (!course) return
+    setPlanned((prev) => {
+      const codes = new Set(prev.map(c => c.code))
+      const next = [...prev]
+      if (!codes.has(course.code)) {
+        next.push(course)
+        codes.add(course.code)
+      }
+      // Auto-pair science lecture <-> lab
+      const linked = scienceLinks[course.code]
+      if (linked && !codes.has(linked)) {
+        const pair = catalogue.find(c => c.code === linked)
+        if (pair) next.push(pair)
+      }
+      return next
+    })
   }
 
   const addPair = (lecture: RecommendedCourse, lab: RecommendedCourse) => {
