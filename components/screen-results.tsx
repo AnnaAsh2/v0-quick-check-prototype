@@ -168,10 +168,82 @@ export function ScreenResults({
 }) {
   const result = useMemo(() => validatePlan(planned), [planned])
 
+  // Derive Course Load status from loadFlags
+  const loadStatus: "green" | "yellow" | "red" = useMemo(() => {
+    if (result.loadFlags.some(f => f.type === "error")) return "red"
+    if (result.loadFlags.some(f => f.type === "warning")) return "yellow"
+    return "green"
+  }, [result.loadFlags])
+
+  // Derive Timeline status from timeline flags
+  const timelineStatus: "green" | "yellow" | "red" = useMemo(() => {
+    for (const sem of result.timeline) {
+      if (sem.flags.some(f => f.type === "error")) return "red"
+    }
+    for (const sem of result.timeline) {
+      if (sem.flags.some(f => f.type === "warning")) return "yellow"
+    }
+    return "green"
+  }, [result.timeline])
+
+  // Overall status across everything
+  const overallStatus: "green" | "yellow" | "red" = useMemo(() => {
+    if (result.failCount > 0 || loadStatus === "red" || timelineStatus === "red") return "red"
+    if (result.conditionalCount > 0 || loadStatus === "yellow" || timelineStatus === "yellow") return "yellow"
+    return "green"
+  }, [result, loadStatus, timelineStatus])
+
+  // 1-2 sentence summary assessment
+  const summaryAssessment = useMemo(() => {
+    if (overallStatus === "red") {
+      const problems: string[] = []
+      if (result.failCount > 0) problems.push(`${result.failCount} prerequisite issue${result.failCount > 1 ? "s" : ""}`)
+      if (loadStatus === "red") problems.push("a course load concern")
+      if (timelineStatus === "red") problems.push("a graduation timeline risk")
+      return `This plan has ${problems.join(" and ")} that need to be resolved before registration. Review the details below and consider adjustments.`
+    }
+    if (overallStatus === "yellow") {
+      const concerns: string[] = []
+      if (result.conditionalCount > 0) concerns.push(`${result.conditionalCount} course${result.conditionalCount > 1 ? "s" : ""} depending on Fall grades`)
+      if (loadStatus === "yellow") concerns.push("a course load outside the standard 15-17 hour range")
+      if (timelineStatus === "yellow") concerns.push("some scheduling pressure in future semesters")
+      return `This plan can move forward but has ${concerns.join(" and ")}. Review the flagged items below to decide if any adjustments are needed.`
+    }
+    return "This plan looks solid. All prerequisites are met, the course load is within standard range, and the graduation timeline is on track for Spring 2028."
+  }, [overallStatus, result, loadStatus, timelineStatus])
+
+  const statusChipStyles = {
+    green: "bg-emerald-50 text-emerald-700",
+    yellow: "bg-amber-50 text-amber-700",
+    red: "bg-red-50 text-red-700",
+  }
+  const statusChipIcons = {
+    green: <CheckCircle2 className="h-4 w-4" />,
+    yellow: <AlertTriangle className="h-4 w-4" />,
+    red: <XCircle className="h-4 w-4" />,
+  }
+  const loadStatusLabel = {
+    green: `${result.totalHrs} hrs — on target`,
+    yellow: `${result.totalHrs} hrs — watch out`,
+    red: `${result.totalHrs} hrs — action needed`,
+  }
+  const timelineStatusLabel = {
+    green: "On track",
+    yellow: "Watch outs flagged",
+    red: "Risks identified",
+  }
+
+  // Overall banner border accent
+  const bannerAccent = {
+    green: "border-l-emerald-500",
+    yellow: "border-l-amber-400",
+    red: "border-l-red-500",
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-6 py-8">
       {/* ========== Overall assessment banner ========== */}
-      <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+      <div className={`overflow-hidden rounded-2xl border border-l-4 ${bannerAccent[overallStatus]} bg-card shadow-sm`}>
         <div className="border-b bg-muted/40 px-6 py-4">
           <h2 className="text-xl font-bold tracking-tight text-foreground">
             QuickCheck Results
@@ -181,17 +253,20 @@ export function ScreenResults({
             {result.totalHrs} credit hours
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3 px-6 py-4">
+
+        {/* Status chips row */}
+        <div className="flex flex-wrap items-center gap-2.5 px-6 py-4">
+          {/* Course checks */}
           {result.passCount > 0 && (
             <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
               <CheckCircle2 className="h-4 w-4" />
-              {result.passCount} of {planned.length} courses check out
+              {result.passCount} of {planned.length} courses clear
             </div>
           )}
           {result.failCount > 0 && (
             <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
               <XCircle className="h-4 w-4" />
-              {result.failCount} prerequisite issue{result.failCount > 1 ? "s" : ""}
+              {result.failCount} prereq issue{result.failCount > 1 ? "s" : ""}
             </div>
           )}
           {result.conditionalCount > 0 && (
@@ -200,12 +275,33 @@ export function ScreenResults({
               {result.conditionalCount} conditional
             </div>
           )}
+
+          {/* Course Load */}
+          <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${statusChipStyles[loadStatus]}`}>
+            <Gauge className="h-4 w-4" />
+            {loadStatusLabel[loadStatus]}
+          </div>
+
+          {/* Graduation Timeline */}
+          <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${statusChipStyles[timelineStatus]}`}>
+            <Calendar className="h-4 w-4" />
+            {timelineStatusLabel[timelineStatus]}
+          </div>
+
+          {/* Suggestion count */}
           {result.suggestionCount > 0 && (
             <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-3 py-2 text-sm font-medium text-primary">
               <Lightbulb className="h-4 w-4" />
               {result.suggestionCount} suggestion
             </div>
           )}
+        </div>
+
+        {/* Summary assessment */}
+        <div className="border-t px-6 py-3">
+          <p className="text-sm leading-relaxed text-foreground/80">
+            {summaryAssessment}
+          </p>
         </div>
       </div>
 

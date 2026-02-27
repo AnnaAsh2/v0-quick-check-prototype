@@ -16,13 +16,17 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const [planned, setPlanned] = useState<Course[]>([])
 
-  const goTo = (s: number) => setScreen(s)
+  const goTo = (s: number) => {
+    setScreen(s)
+    window.scrollTo({ top: 0, behavior: "instant" })
+  }
 
   const handleLoadSample = () => {
     setLoading(true)
     setTimeout(() => {
       setLoading(false)
       setScreen(2)
+      window.scrollTo({ top: 0, behavior: "instant" })
     }, 700)
   }
 
