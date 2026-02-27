@@ -447,6 +447,8 @@ function RequirementGroupCard({
   const recommended = allEligible.filter(c => c.priority === "recommended")
   const options = allEligible.filter(c => c.priority === "option")
 
+
+
   const isScience = group.id === "state-min-core" && group.sciencePairs && group.sciencePairs.length > 0
 
   return (

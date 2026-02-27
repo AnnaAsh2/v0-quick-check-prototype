@@ -1078,8 +1078,8 @@ export function buildRecommendations(planned: Course[]): RequirementGroup[] {
   const plannedCodes = new Set(planned.map(c => c.code))
   const groups: RequirementGroup[] = []
 
-  // Helper: is a course already completed, IP, or planned?
-  const taken = (code: string) => completedCourses.has(code) || inProgressFall2026.has(code) || plannedCodes.has(code)
+  // Helper: is a course already completed or in-progress? (NOT planned -- planned courses stay visible in section)
+  const taken = (code: string) => completedCourses.has(code) || inProgressFall2026.has(code)
   const eligible = (code: string): { ok: boolean; reason?: string } => {
     const entry = catalog[code]
     if (!entry) return { ok: true }
@@ -1107,7 +1107,7 @@ export function buildRecommendations(planned: Course[]): RequirementGroup[] {
     groups.push({
       id: "business-core",
       label: "Business Core",
-      hoursNeeded: 3,
+      hoursNeeded: 3 - bcPlannedHrs,
       hoursCompleted: 18 + bcPlannedHrs,
       type: "single",
       description: "SEVI 30103 is the capstone course and your last remaining Business Core requirement. The 8-semester plan places it in Spring Year 3.",
@@ -1134,7 +1134,7 @@ export function buildRecommendations(planned: Course[]): RequirementGroup[] {
     groups.push({
       id: "econ-major-required",
       label: "Economics Major (Required)",
-      hoursNeeded: econRequiredRemaining.reduce((s, c) => s + c.hrs, 0),
+      hoursNeeded: econRequiredRemaining.reduce((s, c) => s + c.hrs, 0) - econReqPlannedHrs,
       hoursCompleted: 6 + econReqPlannedHrs,
       type: econRequiredRemaining.length === 1 ? "single" : "choose",
       description: "Business Economics concentration requires 24 hours. ECON 30303 and ECON 34303 are in progress. The 8-semester plan recommends 2 upper-level ECON courses per semester for Years 3-4.",
@@ -1172,7 +1172,7 @@ export function buildRecommendations(planned: Course[]): RequirementGroup[] {
     groups.push({
       id: "econ-major-elective",
       label: "Economics Major (Electives)",
-      hoursNeeded: 9,
+      hoursNeeded: 9 - econElecPlannedHrs,
       hoursCompleted: 3 + econElecPlannedHrs,
       type: "choose",
       description: "Choose from ECON 3000/4000-level courses. ECON 34303 (Money & Banking, in progress) counts toward this. Need approximately 6 more hours across remaining semesters.",
@@ -1207,7 +1207,7 @@ export function buildRecommendations(planned: Course[]): RequirementGroup[] {
     groups.push({
       id: "finance-minor",
       label: "Finance Minor",
-      hoursNeeded: 15,
+      hoursNeeded: 15 - finPlannedHrs,
       hoursCompleted: 0 + finPlannedHrs,
       type: "choose",
       description: "Requires 15 hours. FINN 30103 is required and must be taken first. You have 3 semesters remaining -- start now. The 8-semester plan recommends 2 FINN courses per semester starting Spring Year 3.",
@@ -1242,7 +1242,7 @@ export function buildRecommendations(planned: Course[]): RequirementGroup[] {
     groups.push({
       id: "jrsr-electives",
       label: "Jr/Sr Business Electives",
-      hoursNeeded: 12,
+      hoursNeeded: 12 - jrSrPlannedHrs,
       hoursCompleted: 0 + jrSrPlannedHrs,
       type: "choose",
       description: "Any 3000 or 4000-level business course (ACCT, BLAW, ECON, FINN, ISYS, MGMT, MKTG, SCMT, SEVI, BUSI) except ECON 30503, ECON 30603, and MGMT 35603. Finance minor courses also count here.",
@@ -1323,7 +1323,7 @@ export function buildRecommendations(planned: Course[]): RequirementGroup[] {
       groups.push({
         id: "state-min-core",
         label: "State Minimum Core",
-        hoursNeeded: 4,
+        hoursNeeded: 4 - sciPlannedHrs,
         hoursCompleted: 16 + sciPlannedHrs,
         type: "choose",
         description: "16 of 20 hours completed (GEOL 11103/11101, PSYC 20003, ARHS 10003, PHIL 21003 IP, HIST 20003 IP). You still need a Natural Science lecture + matching lab (4 hrs total). Selecting a lecture automatically adds the matching lab.",
@@ -1351,7 +1351,7 @@ export function buildRecommendations(planned: Course[]): RequirementGroup[] {
       groups.push({
         id: "gen-electives",
         label: "General Electives",
-        hoursNeeded: 3,
+        hoursNeeded: 3 - genPlannedHrs,
         hoursCompleted: 3 + genPlannedHrs,
         type: "choose",
         description: "3 of 6 hours completed (COMM 12003). Max 6 hours of business courses and 3 hours of PEAC or DANC courses. Can schedule for a lighter semester.",
