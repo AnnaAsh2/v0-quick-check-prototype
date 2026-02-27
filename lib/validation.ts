@@ -844,8 +844,32 @@ function evaluateLoad(totalHrs: number): LoadFlag[] {
     })
   }
 
-  // Additional contextual flags
-  const econUpper = (codes: Set<string>) => [...codes].filter(cd => cd.startsWith("ECON") && parseInt(cd.split(" ")[1]) >= 30000).length
+  return flags
+}
+
+/**
+ * Check for 3+ courses sharing the same prefix in a list.
+ * Returns flags for every prefix that appears 3+ times.
+ */
+function checkPrefixConcentration(
+  courses: { code: string }[],
+  semLabel: string,
+): LoadFlag[] {
+  const counts = new Map<string, number>()
+  for (const c of courses) {
+    const prefix = c.code.split(" ")[0]
+    if (!prefix || prefix.includes("Elective") || prefix === "Free" || prefix === "Additional" || prefix === "Gen" || prefix === "Jr/Sr") continue
+    counts.set(prefix, (counts.get(prefix) || 0) + 1)
+  }
+  const flags: LoadFlag[] = []
+  for (const [prefix, count] of counts) {
+    if (count >= 3) {
+      flags.push({
+        type: "warning",
+        message: `${count} ${prefix} courses in ${semLabel} is a heavy concentration. Consider spreading ${prefix} courses across semesters for a more balanced workload.`,
+      })
+    }
+  }
   return flags
 }
 
@@ -1161,9 +1185,16 @@ function generateSuggestion(
       if (flag.type === "error" && !issues.some(i => i.message === flag.message)) {
         issues.push({ severity: "red", message: `${sem.label}: ${flag.message}` })
       }
-      if (flag.type === "warning" && flag.message.includes("finance-heavy")) {
+      if (flag.type === "warning" && !issues.some(i => i.message === `${sem.label}: ${flag.message}`)) {
         issues.push({ severity: "yellow", message: `${sem.label}: ${flag.message}` })
       }
+    }
+  }
+
+  // From Load Assessment (includes prefix concentration for Spring 2027)
+  for (const flag of loadFlags) {
+    if (flag.type === "warning" && flag.message.includes("concentration") && !issues.some(i => i.message === flag.message)) {
+      issues.push({ severity: "yellow", message: flag.message })
     }
   }
 
@@ -1293,6 +1324,17 @@ function computeTimeline(planned: Course[]): SemesterPlan[] {
     spring27.flags.push({ type: "warning", message: `${spring27.totalHrs} hours exceeds the standard 17-hour limit. Requires GPA 2.75+ and advisor approval.` })
   } else if (spring27.totalHrs > 0 && spring27.totalHrs < 12) {
     spring27.flags.push({ type: "info", message: `Only ${spring27.totalHrs} hours -- below full-time (12 hrs). May affect financial aid.` })
+  }
+  // Prefix concentration check for current plan
+  const spring27PrefixCounts = new Map<string, number>()
+  for (const c of planned) {
+    const prefix = c.code.split(" ")[0]
+    spring27PrefixCounts.set(prefix, (spring27PrefixCounts.get(prefix) || 0) + 1)
+  }
+  for (const [prefix, count] of spring27PrefixCounts) {
+    if (count >= 3) {
+      spring27.flags.push({ type: "warning", message: `${count} ${prefix} courses this semester is a heavy concentration. Consider spreading ${prefix} courses across semesters for better balance.` })
+    }
   }
 
   /* --- Build "done after Spring 2027" set (assumes all pass) --- */
@@ -1442,18 +1484,21 @@ function computeTimeline(planned: Course[]): SemesterPlan[] {
     const diff = Math.abs(fallHrs - springHrs)
     if (diff > 4) { score += 3; flags.push({ sem: diff > 0 ? 0 : 1, type: "info", message: `Semesters are unbalanced (${fallHrs} vs ${springHrs} hrs). Consider evening out the load.` }) }
 
-    // Finance concentration in final semester
-    const finSpring = spring.filter(c => c.code.startsWith("FINN")).length
-    if (finSpring >= 3) {
-      score += 8
-      flags.push({ sem: 1, type: "warning", message: `${finSpring} finance courses in your final semester creates a finance-heavy load. Consider moving a finance course to Fall 2027.` })
-    }
-
-    // ECON concentration check -- too many upper-ECON in one semester
-    const econFall = fall.filter(c => c.code.startsWith("ECON") && parseInt(c.code.split(" ")[1] || "0") >= 40000).length
-    if (econFall >= 3) {
-      score += 5
-      flags.push({ sem: 0, type: "warning", message: `${econFall} upper-level ECON courses in one semester is a heavy analytical workload.` })
+    // Prefix concentration: flag 3+ courses of same type in either semester
+    for (const [semIdx, semCourses] of [[0, fall], [1, spring]] as [number, Slot[]][]) {
+      const prefixCounts = new Map<string, number>()
+      for (const c of semCourses) {
+        const prefix = c.code.split(" ")[0]
+        if (!prefix || prefix.includes("Elective") || prefix === "Free" || prefix === "Additional" || prefix === "Gen" || prefix === "Jr/Sr") continue
+        prefixCounts.set(prefix, (prefixCounts.get(prefix) || 0) + 1)
+      }
+      for (const [prefix, count] of prefixCounts) {
+        if (count >= 3) {
+          score += 7
+          const semName = semIdx === 0 ? "Fall 2027" : "Spring 2028"
+          flags.push({ sem: semIdx, type: "warning", message: `${count} ${prefix} courses in ${semName} is a heavy concentration. Try to spread ${prefix} courses across semesters for better balance.` })
+        }
+      }
     }
 
     // FINN 30103 not taken until Spring 2028 creates cascading problem
@@ -1956,7 +2001,10 @@ export function validatePlan(planned: Course[]): ValidationResult {
   const totalHrs = planned.reduce((s, c) => s + c.hrs, 0)
 
   const courses = planned.map(c => validateCourse(c, plannedCodes))
-  const loadFlags = evaluateLoad(totalHrs)
+  const loadFlags = [
+    ...evaluateLoad(totalHrs),
+    ...checkPrefixConcentration(planned, "Spring 2027"),
+  ]
   const degreeProgress = computeDegreeProgress(planned, courses)
   const timeline = computeTimeline(planned)
   const suggestion = generateSuggestion(planned, courses, degreeProgress, timeline, loadFlags)
