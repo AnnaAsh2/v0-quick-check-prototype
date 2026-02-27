@@ -1141,7 +1141,9 @@ function generateSuggestion(
   const hasFinn30103 = plannedCodes.has("FINN 30103")
   const finn30603Fail = courseResults.find(r => r.code === "FINN 30603" && r.status === "fail")
   const hasEcon43303 = plannedCodes.has("ECON 43303")
-  const econ43303Cond = courseResults.find(r => r.code === "ECON 43303" && (r.status === "conditional" || r.badges.includes("workload flag")))
+  const hasEcon47403 = plannedCodes.has("ECON 47403")
+  // Only flag ECON 43303 + ECON 47403 concurrency if BOTH are in the same Spring 2027 plan
+  const econ43303Concurrent47403 = hasEcon43303 && hasEcon47403
   const totalHrs = planned.reduce((s, c) => s + c.hrs, 0)
   const failCount = courseResults.filter(r => r.status === "fail").length
   const conditionalCount = courseResults.filter(r => r.status === "conditional").length
@@ -1219,8 +1221,8 @@ function generateSuggestion(
       "FINN 30103 only requires FINN 20403 (completed with a B) and unlocks FINN 30603, FINN 36003, FINN 31003, and FINN 43203 for future semesters.",
       "You haven\u2019t started your 15-hour Finance minor yet -- with 3 semesters left, you need to begin now to complete it on time.",
     ]
-    if (hasEcon43303 && econ43303Cond) {
-      body.push("Consider deferring ECON 43303 to Fall 2027 to lighten your load. That frees a slot for Natural Science (4 hrs, State Min Core), which gets harder to schedule in senior year.")
+    if (econ43303Concurrent47403) {
+      body.push("Consider deferring ECON 43303 to Fall 2027 -- taking it alongside ECON 47403 (4 hrs) is a heavy analytical load. That frees a slot for Natural Science (4 hrs, State Min Core), which gets harder to schedule in senior year.")
     }
     return { title: "Critical: Replace FINN 30603 with FINN 30103 this semester.", body, severity: "red" }
   }
@@ -1242,8 +1244,8 @@ function generateSuggestion(
     if (hasFinn30103 && !hasFinn30603) {
       body.push("FINN 30103 unlocks FINN 30603, FINN 36003, FINN 31003, and FINN 43203 for Fall 2027. You still need 12 more Finance minor hours across 2 semesters -- plan on 2 FINN courses per semester.")
     }
-    if (hasEcon43303 && econ43303Cond) {
-      body.push("ECON 43303 alongside ECON 47403 (4 hrs) is a heavy load. The 8-semester plan places ECON 43303 in Fall Year 4. Consider deferring it.")
+    if (econ43303Concurrent47403) {
+      body.push("ECON 43303 and ECON 47403 (4 hrs) are both in your Spring 2027 plan -- that\u2019s a heavy analytical load. The 8-semester plan places ECON 43303 in Fall Year 4. Consider deferring one to balance semesters.")
     }
     if (sciProgress && sciProgress.value < 20) {
       body.push("Don\u2019t forget: Natural Science lecture + lab (4 hrs) is still needed for State Minimum Core. Scheduling this sooner gives you more flexibility later.")
@@ -1435,13 +1437,16 @@ function computeTimeline(planned: Course[]): SemesterPlan[] {
     }
   }
 
-  // Check total hours to reach 120
+  // Check total hours to reach 120 -- assume electives are 3-hr courses
   const hrsAfterSpring27 = STUDENT.hoursCompleted + STUDENT.hoursInProgress + spring27.totalHrs
   const remainingTotalHrs = remaining.reduce((s, c) => s + c.hrs, 0)
   const projectedTotal = hrsAfterSpring27 + remainingTotalHrs
   const totalGap = Math.max(0, 120 - projectedTotal)
   if (totalGap > 0) {
-    remaining.push({ code: "Free Elective", name: "Additional elective", hrs: totalGap, prereqsNeeded: [], coreqCodes: [], bucket: "Total Hours", note: `${totalGap} hrs needed to reach 120` })
+    const electiveCount = Math.ceil(totalGap / 3)
+    for (let i = 0; i < electiveCount; i++) {
+      remaining.push({ code: `Free Elective${electiveCount > 1 ? ` ${i + 1}` : ""}`, name: "Additional elective", hrs: 3, prereqsNeeded: [], coreqCodes: [], bucket: "Total Hours", note: "3-hr elective to reach 120 total hours" })
+    }
   }
 
   /* --------------------------------------------------------------- */
@@ -1751,7 +1756,7 @@ export function buildRecommendations(planned: Course[]): RequirementGroup[] {
   // ================================================================
   const econRequired: { code: string; name: string; hrs: number; note: string }[] = [
     { code: "ECON 31303", name: "Intermediate Macroeconomics", hrs: 3, note: "Critical: The macro counterpart to ECON 30303. The 8-semester plan places this in Spring Year 3 alongside Econometrics. Taking it now builds the theory foundation for upper-level ECON electives in Years 3-4." },
-    { code: "ECON 43303", name: "Economics of Organizations", hrs: 3, note: "Requires ECON 30303 (in progress Fall 2026). The 8-semester plan places this in Fall Year 4. Taking it this spring is possible but adds workload alongside Econometrics (4 hrs). Consider deferring to balance semesters." },
+    { code: "ECON 43303", name: "Economics of Organizations", hrs: 3, note: "Requires ECON 30303 (in progress Fall 2026). The 8-semester plan places this in Fall Year 4. Taking it earlier is possible if prerequisites are met." },
     { code: "ECON 47403", name: "Introduction to Econometrics", hrs: 4, note: "Core quantitative methods course (4 credit hours). Essential for economic analysis careers. The 8-semester plan places this in Spring Year 3. Note: 4+1 students can take ECON 57403 instead." },
   ]
   const econRequiredRemaining = econRequired.filter(c => !taken(c.code))
