@@ -186,54 +186,69 @@ export function ScreenResults({
     return "green"
   }, [result.timeline])
 
-  // Overall status across everything
-  const overallStatus: "green" | "yellow" | "red" = useMemo(() => {
-    if (result.failCount > 0 || loadStatus === "red" || timelineStatus === "red") return "red"
-    if (result.conditionalCount > 0 || loadStatus === "yellow" || timelineStatus === "yellow") return "yellow"
-    return "green"
-  }, [result, loadStatus, timelineStatus])
+  // The bottom suggestion section is the single source of truth for overall severity
+  const suggestionSeverity: "green" | "yellow" | "red" = result.suggestion?.severity ?? "green"
 
-  // 1-2 sentence summary assessment
+  // 1-2 sentence summary assessment -- driven by suggestion severity
   const summaryAssessment = useMemo(() => {
-    if (overallStatus === "red") {
+    if (suggestionSeverity === "red") {
       const problems: string[] = []
       if (result.failCount > 0) problems.push(`${result.failCount} prerequisite issue${result.failCount > 1 ? "s" : ""}`)
       if (loadStatus === "red") problems.push("a course load concern")
       if (timelineStatus === "red") problems.push("a graduation timeline risk")
       return `This plan has ${problems.join(" and ")} that need to be resolved before registration. Review the details below and consider adjustments.`
     }
-    if (overallStatus === "yellow") {
+    if (suggestionSeverity === "yellow") {
       const concerns: string[] = []
       if (result.conditionalCount > 0) concerns.push(`${result.conditionalCount} course${result.conditionalCount > 1 ? "s" : ""} depending on Fall grades`)
       if (loadStatus === "yellow") concerns.push("a course load outside the standard 15-17 hour range")
       if (timelineStatus === "yellow") concerns.push("some scheduling pressure in future semesters")
-      return `This plan can move forward but has ${concerns.join(" and ")}. Review the flagged items below to decide if any adjustments are needed.`
+      // Check for topic-specific concerns from the suggestion body
+      const bodyText = (result.suggestion?.body ?? []).join(" ").toLowerCase()
+      if (bodyText.includes("finance minor") || bodyText.includes("finn")) concerns.push("Finance minor pacing to track")
+      if (bodyText.includes("natural science") || bodyText.includes("state min")) concerns.push("an outstanding State Minimum Core requirement")
+      const unique = [...new Set(concerns)]
+      return `This plan can move forward but has ${unique.join(" and ")}. Review the flagged items below to decide if any adjustments are needed.`
     }
     return "This plan looks solid. All prerequisites are met, the course load is within standard range, and the graduation timeline is on track for Spring 2028."
-  }, [overallStatus, result, loadStatus, timelineStatus])
+  }, [suggestionSeverity, result, loadStatus, timelineStatus])
+
+  // Detect topic flags from the suggestion body so they surface in the top chips
+  const suggestionTopics = useMemo(() => {
+    const bodyText = (result.suggestion?.body ?? []).join(" ").toLowerCase()
+    const topics: { key: string; label: string; severity: "yellow" | "red" }[] = []
+    if (bodyText.includes("finn") || bodyText.includes("finance minor")) {
+      topics.push({ key: "finance", label: "Finance minor", severity: suggestionSeverity === "red" ? "red" : "yellow" })
+    }
+    if (bodyText.includes("natural science") || bodyText.includes("state min")) {
+      topics.push({ key: "natscience", label: "Nat. Science needed", severity: "yellow" })
+    }
+    if (bodyText.includes("conditional prerequisite") || bodyText.includes("in-progress")) {
+      // Already shown via the conditional chip -- skip
+    }
+    if (bodyText.includes("concentration") || bodyText.includes("three econ") || bodyText.includes("three finn")) {
+      topics.push({ key: "concentration", label: "Prefix concentration", severity: "yellow" })
+    }
+    return topics
+  }, [result.suggestion, suggestionSeverity])
 
   const statusChipStyles = {
     green: "bg-emerald-50 text-emerald-700",
     yellow: "bg-amber-50 text-amber-700",
     red: "bg-red-50 text-red-700",
   }
-  const statusChipIcons = {
-    green: <CheckCircle2 className="h-4 w-4" />,
-    yellow: <AlertTriangle className="h-4 w-4" />,
-    red: <XCircle className="h-4 w-4" />,
-  }
   const loadStatusLabel = {
     green: `${result.totalHrs} hrs — on target`,
-    yellow: `${result.totalHrs} hrs — watch out`,
+    yellow: `${result.totalHrs} hrs — flagged`,
     red: `${result.totalHrs} hrs — action needed`,
   }
   const timelineStatusLabel = {
     green: "On track",
-    yellow: "Watch outs flagged",
+    yellow: "Flagged",
     red: "Risks identified",
   }
 
-  // Overall banner border accent
+  // Banner border accent matches the bottom suggestion section color
   const bannerAccent = {
     green: "border-l-emerald-500",
     yellow: "border-l-amber-400",
@@ -243,7 +258,7 @@ export function ScreenResults({
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-6 py-8">
       {/* ========== Overall assessment banner ========== */}
-      <div className={`overflow-hidden rounded-2xl border border-l-4 ${bannerAccent[overallStatus]} bg-card shadow-sm`}>
+      <div className={`overflow-hidden rounded-2xl border border-l-4 ${bannerAccent[suggestionSeverity]} bg-card shadow-sm`}>
         <div className="border-b bg-muted/40 px-6 py-4">
           <h2 className="text-xl font-bold tracking-tight text-foreground">
             QuickCheck Results
@@ -288,13 +303,16 @@ export function ScreenResults({
             {timelineStatusLabel[timelineStatus]}
           </div>
 
-          {/* Suggestion count */}
-          {result.suggestionCount > 0 && (
-            <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-3 py-2 text-sm font-medium text-primary">
-              <Lightbulb className="h-4 w-4" />
-              {result.suggestionCount} suggestion
+          {/* Topic-specific flags from the bottom suggestion -- surface here */}
+          {suggestionTopics.map((topic) => (
+            <div
+              key={topic.key}
+              className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${statusChipStyles[topic.severity]}`}
+            >
+              {topic.severity === "red" ? <XCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+              {topic.label}
             </div>
-          )}
+          ))}
         </div>
 
         {/* Summary assessment */}
