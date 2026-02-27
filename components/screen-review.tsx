@@ -14,9 +14,18 @@ import {
   ChevronRight,
   ShieldCheck,
   User,
+  MessageSquareWarning,
+  UserRoundSearch,
+  Mail,
+  ArrowLeft,
+  FileText,
+  MessageCircleQuestion,
+  ExternalLink,
+  Send,
 } from "lucide-react"
-import { validatePlan } from "@/lib/validation"
+import { validatePlan, STUDENT } from "@/lib/validation"
 import type { Course, CourseStatus } from "@/lib/validation"
+import { WorksheetVisual } from "@/components/worksheet-visual"
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -44,62 +53,348 @@ function borderColor(status: CourseStatus) {
   }
 }
 
+type ViewMode = "review" | "approve-email" | "meeting-email" | "meeting-prep" | "question-email"
+
 /* ------------------------------------------------------------------ */
-/*  Component                                                          */
+/*  Main Component                                                     */
 /* ------------------------------------------------------------------ */
 
 export function ScreenReview({ planned }: { planned: Course[] }) {
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [view, setView] = useState<ViewMode>("review")
+  const [advisorNotes, setAdvisorNotes] = useState("")
   const result = useMemo(() => validatePlan(planned), [planned])
+  const { advisorIntel } = result
 
   const toggle = (code: string) =>
     setExpanded((prev) => (prev === code ? null : code))
 
-  // Generate a dynamic advisor note based on results
-  const advisorNote = useMemo(() => {
-    const failCourses = result.courses.filter((c) => c.status === "fail")
-    const conditionalCourses = result.courses.filter(
-      (c) => c.status === "conditional"
-    )
-    const plannedCodes = new Set(planned.map((c) => c.code))
-
+  // Seed advisor notes on first render
+  const defaultNotes = useMemo(() => {
     const lines: string[] = []
-
-    if (failCourses.length > 0) {
-      failCourses.forEach((c) => {
+    if (result.failCount > 0) {
+      result.courses.filter(c => c.status === "fail").forEach(c => {
         if (c.code === "FINN 30603") {
-          lines.push(
-            "FINN 30603 \u2192 FINN 30103 swap is a must \u2014 Jordan needs it for the minor and hasn\u2019t started those 15 hours yet. With 3 semesters left, the minor is doable but tight."
-          )
+          lines.push("FINN 30603 needs to be swapped for FINN 30103 -- Jordan needs it for the minor and hasn't started those 15 hours yet.")
         } else {
-          lines.push(
-            `${c.code} has unmet prerequisites and cannot be registered. Needs attention.`
-          )
+          lines.push(`${c.code} has unmet prerequisites and cannot be registered. Needs attention.`)
         }
       })
     }
-
-    if (plannedCodes.has("FINN 30103") && !plannedCodes.has("FINN 30603")) {
-      lines.push(
-        "Good that Jordan is taking FINN 30103 \u2014 this starts the Finance minor and unlocks upper-level FINN courses for Fall 2027."
-      )
+    if (result.courses.find(c => c.code === "FINN 30103" && c.status === "pass")) {
+      lines.push("Good that Jordan is taking FINN 30103 -- this starts the Finance minor and unlocks upper-level FINN courses for Fall 2027.")
     }
-
-    if (conditionalCourses.find((c) => c.code === "ECON 43303")) {
-      lines.push(
-        "I\u2019d consider deferring ECON 43303 to Fall 2027 to lighten the load \u2014 " +
-          result.totalHrs +
-          " hrs with econometrics is a lot. That frees up room for a science lab this spring, which still needs to get done."
-      )
+    if (lines.length === 0) {
+      lines.push("Plan looks reasonable overall. No major concerns.")
     }
-
-    lines.push(
-      "Let\u2019s meet to map out the full minor sequence and remaining requirements."
-    )
-
     return lines.join(" ")
-  }, [result, planned])
+  }, [result])
 
+  /* ---------------------------------------------------------------- */
+  /*  Email Generators                                                 */
+  /* ---------------------------------------------------------------- */
+
+  const approveEmailBody = useMemo(() => {
+    const lines = [
+      `Hi Jordan,`,
+      ``,
+      `I've reviewed your Spring 2027 course plan and it looks good to go. Here's a quick summary:`,
+      ``,
+      `Courses: ${planned.map(c => `${c.code} (${c.name})`).join(", ")}`,
+      `Total Hours: ${result.totalHrs}`,
+      ``,
+    ]
+    if (advisorNotes.trim()) {
+      lines.push(`A few notes from my review:`, ``, advisorNotes.trim(), ``)
+    }
+    if (result.suggestion?.severity === "yellow") {
+      lines.push(`One thing to keep in mind: ${result.suggestion.body[0]}`, ``)
+    }
+    lines.push(
+      `Your updated degree worksheet is attached below showing your completed, in-progress, and newly planned courses.`,
+      ``,
+      `You're on track for Spring 2028 graduation. Let me know if you have any questions.`,
+      ``,
+      `Best,`,
+      `Academic Advisor`,
+      `Walton College of Business`,
+    )
+    return lines.join("\n")
+  }, [planned, result, advisorNotes])
+
+  const meetingEmailBody = useMemo(() => {
+    const redFlags = advisorIntel.allIssues.filter(i => i.severity === "red")
+    const yellowFlags = advisorIntel.allIssues.filter(i => i.severity === "yellow")
+
+    const lines = [
+      `Hi Jordan,`,
+      ``,
+      `I've been reviewing your Spring 2027 course plan and I'd like to meet with you to discuss a few things before we finalize it.`,
+      ``,
+    ]
+    if (redFlags.length > 0) {
+      lines.push(`There ${redFlags.length === 1 ? "is" : "are"} ${redFlags.length} issue${redFlags.length > 1 ? "s" : ""} that ${redFlags.length === 1 ? "needs" : "need"} to be resolved before you can register:`)
+      redFlags.forEach(f => lines.push(`  - ${f.message}`))
+      lines.push(``)
+    }
+    if (yellowFlags.length > 0) {
+      lines.push(`I also have ${yellowFlags.length > 1 ? "a few" : "a"} question${yellowFlags.length > 1 ? "s" : ""} about your plan that would be helpful to talk through in person.`)
+      lines.push(``)
+    }
+    lines.push(
+      `Please schedule a 20-minute appointment using this link:`,
+      `https://calendly.com/walton-advising/jordan-martinez`,
+      ``,
+      `Looking forward to connecting.`,
+      ``,
+      `Best,`,
+      `Academic Advisor`,
+      `Walton College of Business`,
+    )
+    return lines.join("\n")
+  }, [advisorIntel])
+
+  const questionEmailBody = useMemo(() => {
+    const lines = [
+      `Hi Jordan,`,
+      ``,
+      `I'm reviewing your Spring 2027 course plan and had a couple of quick questions before I can approve it:`,
+      ``,
+    ]
+    advisorIntel.questionsForStudent.forEach((q, i) => {
+      lines.push(`${i + 1}. ${q.question}`)
+      lines.push(``)
+    })
+    lines.push(
+      `Once I hear back from you, I should be able to finalize everything. Just reply to this email -- no need to schedule a meeting unless you'd prefer to talk in person.`,
+      ``,
+      `Best,`,
+      `Academic Advisor`,
+      `Walton College of Business`,
+    )
+    return lines.join("\n")
+  }, [advisorIntel])
+
+  /* ---------------------------------------------------------------- */
+  /*  Sub-views                                                        */
+  /* ---------------------------------------------------------------- */
+
+  if (view === "approve-email") {
+    return (
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-6 py-8">
+        <button onClick={() => setView("review")} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit">
+          <ArrowLeft className="h-3.5 w-3.5" /> Back to Review
+        </button>
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <Mail className="h-5 w-5 text-emerald-600" />
+            <h2 className="text-lg font-bold text-foreground">Approval Email Preview</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">This email will be sent to Jordan confirming the plan is approved.</p>
+        </div>
+        <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+          <div className="flex flex-col gap-1 border-b bg-muted/30 px-4 py-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">To:</span> jordan.martinez@uark.edu
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">Subject:</span> Your Spring 2027 Plan Has Been Approved
+            </div>
+          </div>
+          <div className="px-4 py-4">
+            <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">{approveEmailBody}</pre>
+          </div>
+          <div className="border-t px-4 py-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Attached: Degree Worksheet</p>
+            <WorksheetVisual degreeProgress={result.degreeProgress} compact />
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <Button className="gap-2 bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => setView("review")}>
+            <Send className="h-4 w-4" /> Send Approval
+          </Button>
+          <Button variant="outline" onClick={() => setView("review")}>Cancel</Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (view === "meeting-email") {
+    return (
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-6 py-8">
+        <button onClick={() => setView("review")} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit">
+          <ArrowLeft className="h-3.5 w-3.5" /> Back to Review
+        </button>
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <CalendarDays className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-bold text-foreground">Meeting Request Email</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">This email explains the reason for the meeting and includes a scheduling link.</p>
+        </div>
+        <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+          <div className="flex flex-col gap-1 border-b bg-muted/30 px-4 py-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">To:</span> jordan.martinez@uark.edu
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">Subject:</span> {"Let's"} Meet to Discuss Your Spring 2027 Plan
+            </div>
+          </div>
+          <div className="px-4 py-4">
+            <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">{meetingEmailBody}</pre>
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <Button className="gap-2" onClick={() => setView("review")}>
+            <Send className="h-4 w-4" /> Send Meeting Request
+          </Button>
+          <Button variant="outline" className="gap-2" onClick={() => setView("meeting-prep")}>
+            <FileText className="h-4 w-4" /> Open Meeting Prep
+          </Button>
+          <Button variant="ghost" onClick={() => setView("review")}>Cancel</Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (view === "meeting-prep") {
+    return (
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-6 py-8">
+        <button onClick={() => setView("meeting-email")} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit">
+          <ArrowLeft className="h-3.5 w-3.5" /> Back to Meeting Email
+        </button>
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <FileText className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-bold text-foreground">Meeting Prep</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">Everything you need for the advising appointment at a glance.</p>
+        </div>
+
+        {/* Student Summary */}
+        <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+          <div className="bg-muted/30 border-b px-4 py-2.5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Student Overview</p>
+          </div>
+          <div className="px-4 py-3">
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm mb-3">
+              <span><span className="text-muted-foreground">Name:</span> <span className="font-medium">Jordan Martinez</span></span>
+              <span><span className="text-muted-foreground">Year:</span> <span className="font-medium">{STUDENT.classification}</span></span>
+              <span><span className="text-muted-foreground">GPA:</span> <span className="font-medium">{STUDENT.gpa}</span></span>
+              <span><span className="text-muted-foreground">Major:</span> <span className="font-medium">{STUDENT.major}</span></span>
+              <span><span className="text-muted-foreground">Minor:</span> <span className="font-medium">{STUDENT.minor}</span></span>
+              <span><span className="text-muted-foreground">Grad Target:</span> <span className="font-medium">{STUDENT.expectedGrad}</span></span>
+            </div>
+            <p className="text-sm leading-relaxed text-foreground/80">{advisorIntel.studentSummary}</p>
+          </div>
+        </div>
+
+        {/* Flags & Watch-outs */}
+        <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+          <div className="bg-muted/30 border-b px-4 py-2.5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Flags & Watch-outs</p>
+          </div>
+          <div className="px-4 py-3 flex flex-col gap-2">
+            {advisorIntel.allIssues.length === 0 && (
+              <p className="text-sm text-muted-foreground">No issues flagged -- plan looks clean.</p>
+            )}
+            {advisorIntel.allIssues.map((issue, i) => (
+              <div key={i} className={`flex items-start gap-2 rounded-lg px-3 py-2 text-sm ${issue.severity === "red" ? "bg-red-50 text-red-800" : "bg-amber-50 text-amber-800"}`}>
+                {issue.severity === "red" ? <XCircle className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />}
+                {issue.message}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Worksheet */}
+        <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+          <div className="bg-muted/30 border-b px-4 py-2.5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Degree Worksheet</p>
+          </div>
+          <div className="px-4 py-3">
+            <WorksheetVisual degreeProgress={result.degreeProgress} compact />
+          </div>
+        </div>
+
+        {/* Talking Points */}
+        <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+          <div className="bg-muted/30 border-b px-4 py-2.5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Talking Points</p>
+          </div>
+          <div className="px-4 py-3">
+            <ol className="flex flex-col gap-3">
+              {advisorIntel.talkingPoints.map((point, i) => (
+                <li key={i} className="flex gap-3 text-sm leading-relaxed">
+                  <span className="shrink-0 flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">{i + 1}</span>
+                  <span className="text-foreground/80">{point}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
+
+        <Button variant="outline" onClick={() => setView("meeting-email")} className="w-fit">
+          <ArrowLeft className="h-4 w-4 mr-1.5" /> Back to Meeting Email
+        </Button>
+      </div>
+    )
+  }
+
+  if (view === "question-email") {
+    return (
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-6 py-8">
+        <button onClick={() => setView("review")} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit">
+          <ArrowLeft className="h-3.5 w-3.5" /> Back to Review
+        </button>
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <MessageCircleQuestion className="h-5 w-5 text-amber-600" />
+            <h2 className="text-lg font-bold text-foreground">Question Email Preview</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">Ask Jordan 1-2 targeted questions before making a decision on the plan.</p>
+        </div>
+        <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+          <div className="flex flex-col gap-1 border-b bg-muted/30 px-4 py-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">To:</span> jordan.martinez@uark.edu
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">Subject:</span> Quick Question About Your Spring 2027 Plan
+            </div>
+          </div>
+          <div className="px-4 py-4">
+            <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">{questionEmailBody}</pre>
+          </div>
+        </div>
+        {/* Show the reasoning behind each question */}
+        <div className="rounded-xl border bg-muted/20 shadow-sm overflow-hidden">
+          <div className="px-4 py-2.5 border-b bg-muted/30">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Why these questions</p>
+          </div>
+          <div className="px-4 py-3 flex flex-col gap-2">
+            {advisorIntel.questionsForStudent.map((q, i) => (
+              <div key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
+                <span className="shrink-0 font-bold text-foreground">Q{i + 1}:</span>
+                <span>{q.reason}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <Button className="gap-2 bg-amber-600 text-white hover:bg-amber-700" onClick={() => setView("review")}>
+            <Send className="h-4 w-4" /> Send Question
+          </Button>
+          <Button variant="outline" onClick={() => setView("review")}>Cancel</Button>
+        </div>
+      </div>
+    )
+  }
+
+  /* ---------------------------------------------------------------- */
+  /*  Main review view                                                 */
+  /* ---------------------------------------------------------------- */
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-6 py-8">
       {/* Header */}
@@ -110,17 +405,24 @@ export function ScreenReview({ planned }: { planned: Course[] }) {
             Advisor Review
           </p>
         </div>
-        <h2 className="text-xl font-bold tracking-tight text-foreground">
-          Jordan Martinez
-        </h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl font-bold tracking-tight text-foreground">
+            Jordan Martinez
+          </h2>
+          {advisorIntel.inPersonSuggested && (
+            <Badge className="gap-1 bg-red-100 text-red-700 border-red-200 text-xs font-semibold">
+              <UserRoundSearch className="h-3 w-3" />
+              In-Person Suggested
+            </Badge>
+          )}
+        </div>
         <p className="mt-0.5 text-sm text-muted-foreground">
           Business Economics (Junior) &middot; Finance Minor &middot; Spring
-          2027 Plan &middot; {planned.length} courses, {result.totalHrs} credit
-          hours
+          2027 Plan &middot; {planned.length} courses, {result.totalHrs} credit hours
         </p>
       </div>
 
-      {/* Summary card */}
+      {/* Summary badges */}
       <div className="flex flex-wrap gap-3 rounded-xl border bg-card p-4 shadow-sm">
         {result.passCount > 0 && (
           <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700">
@@ -147,6 +449,26 @@ export function ScreenReview({ planned }: { planned: Course[] }) {
           </div>
         )}
       </div>
+
+      {/* Biggest Flags */}
+      {advisorIntel.biggestFlags.length > 0 && (
+        <div className="rounded-xl border-2 border-amber-200 bg-amber-50/50 shadow-sm overflow-hidden">
+          <div className="flex items-center gap-2 bg-amber-100/60 border-b border-amber-200 px-4 py-2.5">
+            <MessageSquareWarning className="h-4 w-4 text-amber-700" />
+            <p className="text-xs font-semibold uppercase tracking-wider text-amber-800">
+              Biggest Flags to Dig Into
+            </p>
+          </div>
+          <div className="px-4 py-3 flex flex-col gap-4">
+            {advisorIntel.biggestFlags.map((flag, i) => (
+              <div key={i} className="flex flex-col gap-1">
+                <p className="text-sm font-semibold text-amber-900">{flag.question}</p>
+                <p className="text-sm leading-relaxed text-amber-800/80">{flag.context}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Collapsible course cards */}
       <div className="flex flex-col gap-2">
@@ -182,21 +504,15 @@ export function ScreenReview({ planned }: { planned: Course[] }) {
               <div className="border-t bg-muted/20 px-4 py-3.5 text-sm leading-relaxed">
                 <div className="flex flex-col gap-1.5 text-foreground/80">
                   <p>
-                    <span className="font-medium text-muted-foreground">
-                      Counts toward:
-                    </span>{" "}
+                    <span className="font-medium text-muted-foreground">Counts toward:</span>{" "}
                     {c.countsToward}
                   </p>
                   <p>
-                    <span className="font-medium text-muted-foreground">
-                      Prerequisites:
-                    </span>{" "}
+                    <span className="font-medium text-muted-foreground">Prerequisites:</span>{" "}
                     {c.prereqs}
                   </p>
                   <p>
-                    <span className="font-medium text-muted-foreground">
-                      Note:
-                    </span>{" "}
+                    <span className="font-medium text-muted-foreground">Note:</span>{" "}
                     {c.note}
                   </p>
                   {c.impact && (
@@ -220,30 +536,53 @@ export function ScreenReview({ planned }: { planned: Course[] }) {
           </p>
         </div>
         <Textarea
-          defaultValue={advisorNote}
-          rows={6}
+          defaultValue={defaultNotes}
+          onChange={(e) => setAdvisorNotes(e.target.value)}
+          rows={5}
           className="text-sm leading-relaxed shadow-sm"
+          placeholder="Add any notes for your records or to include in the student email..."
         />
       </div>
 
-      {/* Actions */}
-      <div className="flex flex-col gap-4 border-t pt-6 sm:flex-row sm:items-center sm:gap-4">
-        <Button
-          size="lg"
-          className="gap-2 bg-emerald-600 text-white shadow-sm hover:bg-emerald-700"
-        >
-          <CheckCircle2 className="h-4 w-4" />
-          Approve Plan & Notify Student
-        </Button>
-        <Button variant="outline" size="lg" className="gap-2 shadow-sm">
-          <CalendarDays className="h-4 w-4" />
-          Request Meeting
-        </Button>
+      {/* Actions -- 3 buttons */}
+      <div className="border-t pt-6">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">
+          Actions
+        </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:gap-3">
+          <Button
+            size="lg"
+            className="gap-2 bg-emerald-600 text-white shadow-sm hover:bg-emerald-700"
+            onClick={() => setView("approve-email")}
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            Approve Plan & Notify Student
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
+            className="gap-2 shadow-sm"
+            onClick={() => setView("meeting-email")}
+          >
+            <CalendarDays className="h-4 w-4" />
+            Request Meeting
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
+            className="gap-2 shadow-sm border-amber-200 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+            onClick={() => setView("question-email")}
+          >
+            <MessageCircleQuestion className="h-4 w-4" />
+            Ask a Question
+          </Button>
+        </div>
       </div>
+
       <p className="pb-8 text-xs text-muted-foreground leading-relaxed">
-        Student will receive your feedback and the approved plan via email. All
-        records are saved to the student{"'"}s advising file. Requesting a
-        meeting will prompt the student to schedule an advising session.
+        Student will receive your feedback via email. Approving sends the plan with the attached worksheet.
+        Requesting a meeting sends a scheduling link. Asking a question emails 1-2 follow-up items. All
+        records are saved to the student{"'"}s advising file.
       </p>
     </div>
   )

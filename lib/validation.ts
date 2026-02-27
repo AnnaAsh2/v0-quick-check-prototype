@@ -60,6 +60,26 @@ export interface SemesterPlan {
 
 export type SuggestionSeverity = "green" | "yellow" | "red"
 
+export interface AdvisorFlag {
+  severity: "red" | "yellow"
+  message: string
+}
+
+export interface AdvisorIntelligence {
+  /** 1-2 biggest flags for advisor to dig into */
+  biggestFlags: { question: string; context: string }[]
+  /** All collected issues */
+  allIssues: AdvisorFlag[]
+  /** Whether in-person meeting is suggested */
+  inPersonSuggested: boolean
+  /** Student summary sentence */
+  studentSummary: string
+  /** 3-5 talking points for meeting prep */
+  talkingPoints: string[]
+  /** 1-2 questions to ask the student */
+  questionsForStudent: { question: string; reason: string }[]
+}
+
 export interface ValidationResult {
   courses: CourseResult[]
   loadFlags: LoadFlag[]
@@ -71,6 +91,7 @@ export interface ValidationResult {
   suggestionCount: number
   suggestion: { title: string; body: string[]; severity: SuggestionSeverity } | null
   timeline: SemesterPlan[]
+  advisorIntel: AdvisorIntelligence
 }
 
 /* ------------------------------------------------------------------ */
@@ -79,7 +100,7 @@ export interface ValidationResult {
 /* ------------------------------------------------------------------ */
 
 /** Courses completed with final grades. Key = code, value = grade */
-const completedRecord: Record<string, string> = {
+export const completedRecord: Record<string, string> = {
   // Pre-Business Core
   "ENGL 10103": "A",
   "ENGL 10203": "B",
@@ -112,7 +133,7 @@ const completedRecord: Record<string, string> = {
 const completedCourses = new Set(Object.keys(completedRecord))
 
 /** In-progress Fall 2026 courses */
-const inProgressFall2026 = new Set([
+export const inProgressFall2026 = new Set([
   "MKTG 34303", // Business Core
   "ECON 30303", // Econ Major - Intermediate Micro
   "ECON 34303", // Money & Banking (ECON elective / minor course)
@@ -126,7 +147,7 @@ const allHad = new Set([...completedCourses, ...inProgressFall2026])
 /*  Student profile constants                                          */
 /* ------------------------------------------------------------------ */
 
-const STUDENT = {
+export const STUDENT = {
   gpa: 3.19,
   prevSemesterGpa: 3.19, // assume same for demo
   hoursCompleted: 65,
@@ -2033,6 +2054,181 @@ export function buildRecommendations(planned: Course[]): RequirementGroup[] {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Advisor Intelligence Generator                                     */
+/* ------------------------------------------------------------------ */
+
+function generateAdvisorIntelligence(
+  planned: Course[],
+  courses: CourseResult[],
+  degreeProgress: DegreeItem[],
+  timeline: SemesterPlan[],
+  loadFlags: LoadFlag[],
+  suggestion: { title: string; body: string[]; severity: SuggestionSeverity } | null,
+  totalHrs: number,
+): AdvisorIntelligence {
+  const plannedCodes = new Set(planned.map(c => c.code))
+
+  // Collect all issues (reuse suggestion logic pattern)
+  const allIssues: AdvisorFlag[] = []
+  const failCount = courses.filter(c => c.status === "fail").length
+  const conditionalCount = courses.filter(c => c.status === "conditional").length
+
+  if (failCount > 0) {
+    for (const c of courses.filter(c => c.status === "fail")) {
+      allIssues.push({ severity: "red", message: `${c.code} (${c.name}): ${c.note}` })
+    }
+  }
+  if (conditionalCount > 0) {
+    for (const c of courses.filter(c => c.status === "conditional")) {
+      allIssues.push({ severity: "yellow", message: `${c.code}: Conditional -- depends on completing in-progress course with C or better` })
+    }
+  }
+  for (const flag of loadFlags) {
+    if (flag.type === "error") allIssues.push({ severity: "red", message: flag.message })
+    if (flag.type === "warning" && !allIssues.some(i => i.message === flag.message)) {
+      allIssues.push({ severity: "yellow", message: flag.message })
+    }
+  }
+  for (const sem of timeline) {
+    for (const flag of sem.flags) {
+      if (flag.type === "error" && !allIssues.some(i => i.message.includes(flag.message))) {
+        allIssues.push({ severity: "red", message: `${sem.label}: ${flag.message}` })
+      }
+      if (flag.type === "warning" && !allIssues.some(i => i.message.includes(flag.message))) {
+        allIssues.push({ severity: "yellow", message: `${sem.label}: ${flag.message}` })
+      }
+    }
+  }
+
+  const hasRed = allIssues.some(i => i.severity === "red")
+  const inPersonSuggested = hasRed
+
+  // Student summary
+  const remaining = 120 - (STUDENT.hoursCompleted + STUDENT.hoursInProgress + totalHrs)
+  const studentSummary = `Jordan Martinez is a ${STUDENT.classification} (${STUDENT.gpa} GPA) pursuing a BSBA in ${STUDENT.major} with a ${STUDENT.minor} minor. ${STUDENT.hoursCompleted} hours completed, ${STUDENT.hoursInProgress} in progress this Fall, planning ${totalHrs} for Spring 2027. ${remaining > 0 ? remaining + " hours remain" : "On track"} toward the 120-hour graduation target (Spring 2028).`
+
+  // Biggest flags: pick the 1-2 most important things for the advisor
+  const biggestFlags: { question: string; context: string }[] = []
+
+  // Check for Finance minor timing
+  const finProgress = degreeProgress.find(d => d.label.includes("Finance Minor"))
+  const finn30103Planned = plannedCodes.has("FINN 30103")
+  if (finProgress && finProgress.value < 6) {
+    if (!finn30103Planned && !completedCourses.has("FINN 30103")) {
+      biggestFlags.push({
+        question: "Can Jordan realistically complete the Finance minor by Spring 2028?",
+        context: `Only ${finProgress.value} of 15 Finance minor hours done. FINN 30103 (the gateway course) hasn't been taken yet. With 3 semesters left, completing 15 hours of finance requires starting immediately and taking 2 FINN courses per semester.`,
+      })
+    } else if (finn30103Planned) {
+      biggestFlags.push({
+        question: "Is the Finance minor sequence mapped out through graduation?",
+        context: `Jordan is starting FINN 30103 this semester (good), but still needs 12 more Finance hours across Fall 2027 and Spring 2028. Confirm which specific FINN courses Jordan plans to take and that they're offered in those semesters.`,
+      })
+    }
+  }
+
+  // Check for prerequisite failures
+  if (failCount > 0) {
+    const failCodes = courses.filter(c => c.status === "fail").map(c => c.code)
+    biggestFlags.push({
+      question: `Does Jordan understand why ${failCodes.join(", ")} can't be registered for?`,
+      context: `${failCount} course(s) have unmet prerequisites. Jordan may have misread the catalog or assumed in-progress courses count. Verify they know which specific prerequisite is missing and what alternative course to take instead.`,
+    })
+  }
+
+  // Check overload
+  if (totalHrs > 17 && biggestFlags.length < 2) {
+    biggestFlags.push({
+      question: `Is ${totalHrs} credit hours manageable given Jordan's ${STUDENT.gpa} GPA?`,
+      context: `The plan exceeds the standard 17-hour limit. Jordan's GPA meets the 2.75 threshold for overload approval, but consider work schedule, extracurriculars, and how the ${conditionalCount > 0 ? "conditional courses" : "course mix"} might affect workload.`,
+    })
+  }
+
+  // Check if natural science is still outstanding
+  const sciProgress = degreeProgress.find(d => d.label.includes("State Minimum"))
+  if (sciProgress && sciProgress.courses?.some(c => c.code.includes("Science") && c.status === "remaining") && biggestFlags.length < 2) {
+    biggestFlags.push({
+      question: "When is Jordan planning to take the Natural Science requirement?",
+      context: "The 4-hour Natural Science lecture + lab is still outstanding. Pushing it to senior year limits scheduling flexibility since labs have fixed time slots. Consider whether it should be prioritized for Fall 2027.",
+    })
+  }
+
+  // Talking points for meeting prep (relationship + substance)
+  const talkingPoints: string[] = [
+    "How's the semester going so far? Anything from your Fall courses that's been particularly challenging or interesting?",
+    "Are you working or involved in anything outside of class this semester? I want to make sure your course load is realistic.",
+  ]
+
+  if (finn30103Planned || completedCourses.has("FINN 30103")) {
+    talkingPoints.push("Tell me about your interest in Finance -- what drew you to the minor, and do you see it connecting to a career path?")
+  }
+
+  if (failCount > 0) {
+    talkingPoints.push(`Let's walk through the ${failCount > 1 ? "courses" : "course"} with prerequisite issues -- I want to make sure we find the right replacement${failCount > 1 ? "s" : ""} and you understand what's needed.`)
+  }
+
+  if (finProgress && finProgress.value < 15) {
+    talkingPoints.push(`Let's map out your Finance minor semester-by-semester -- you need ${15 - finProgress.value} more hours, and we should make sure the courses you want are actually offered when you need them.`)
+  }
+
+  if (totalHrs > 17) {
+    talkingPoints.push(`Your plan is ${totalHrs} hours, which is above the standard max. Let's talk about whether that's realistic given everything else on your plate, or if we should trim one course.`)
+  }
+
+  if (remaining > 0 && remaining < 30) {
+    talkingPoints.push(`You have ${remaining} hours left to graduate -- let's make sure your remaining semesters are balanced and you're not scrambling at the end.`)
+  }
+
+  // Limit to 5
+  if (talkingPoints.length > 5) talkingPoints.length = 5
+
+  // Questions for "Ask a Question" email
+  const questionsForStudent: { question: string; reason: string }[] = []
+
+  if (failCount > 0) {
+    const failCodes = courses.filter(c => c.status === "fail").map(c => c.code)
+    questionsForStudent.push({
+      question: `I noticed ${failCodes.join(" and ")} on your plan, but the prerequisite${failCount > 1 ? "s aren't" : " isn't"} met yet. Were you aware of this, and do you have an alternative course in mind?`,
+      reason: "Prerequisite issue needs to be resolved before registration opens",
+    })
+  }
+
+  if (finProgress && finProgress.value < 6 && !finn30103Planned) {
+    questionsForStudent.push({
+      question: "I see the Finance minor on your degree plan, but FINN 30103 isn't in your Spring schedule. Are you planning to start the minor in Fall 2027 instead, or would you like to swap a course to begin it this spring?",
+      reason: "Finance minor timing is tight with 3 semesters remaining",
+    })
+  }
+
+  if (totalHrs > 17) {
+    questionsForStudent.push({
+      question: `Your plan is at ${totalHrs} credit hours, which is above the standard 17-hour limit. Do you have a work schedule or other commitments I should know about? I want to make sure this load is sustainable.`,
+      reason: "Overload requires GPA 2.75+ and advisor approval",
+    })
+  }
+
+  if (questionsForStudent.length === 0) {
+    // Gentle check-in question
+    questionsForStudent.push({
+      question: "Your plan looks solid overall. Before I approve it, is there anything about your Spring schedule you're uncertain about or would like to discuss?",
+      reason: "General check-in -- no major issues detected",
+    })
+  }
+
+  // Limit to 2
+  if (questionsForStudent.length > 2) questionsForStudent.length = 2
+
+  return {
+    biggestFlags: biggestFlags.slice(0, 2),
+    allIssues,
+    inPersonSuggested,
+    studentSummary,
+    talkingPoints,
+    questionsForStudent,
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /*  Main validation entry point                                        */
 /* ------------------------------------------------------------------ */
 
@@ -2048,6 +2244,7 @@ export function validatePlan(planned: Course[]): ValidationResult {
   const degreeProgress = computeDegreeProgress(planned, courses)
   const timeline = computeTimeline(planned)
   const suggestion = generateSuggestion(planned, courses, degreeProgress, timeline, loadFlags)
+  const advisorIntel = generateAdvisorIntelligence(planned, courses, degreeProgress, timeline, loadFlags, suggestion, totalHrs)
 
   const passCount = courses.filter(c => c.status === "pass").length
   const conditionalCount = courses.filter(c => c.status === "conditional").length
@@ -2057,6 +2254,6 @@ export function validatePlan(planned: Course[]): ValidationResult {
   return {
     courses, loadFlags, degreeProgress, totalHrs,
     passCount, conditionalCount, failCount, suggestionCount,
-    suggestion, timeline,
+    suggestion, timeline, advisorIntel,
   }
 }
