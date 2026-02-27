@@ -2203,33 +2203,80 @@ function generateAdvisorIntelligence(
     })
   }
 
-  // Talking points for meeting prep (relationship + substance)
-  const talkingPoints: string[] = [
-    "How's the semester going so far? Anything from your Fall courses that's been particularly challenging or interesting?",
-    "Are you working or involved in anything outside of class this semester? I want to make sure your course load is realistic.",
-  ]
+  // Talking points for meeting prep -- all grounded in student's actual plan data
+  const talkingPoints: string[] = []
 
-  if (finn30103Planned || completedCourses.has("FINN 30103")) {
-    talkingPoints.push("Tell me about your interest in Finance -- what drew you to the minor, and do you see it connecting to a career path?")
+  // Compute per-semester averages for context
+  const hrsPerSemNeeded = remaining > 0 ? Math.ceil(remaining / 3) : 15 // 3 semesters left (Sp27, F27, Sp28)
+  const inProgressCourseList = [...inProgressFall2026].map(c => c.split(" ")[0]).join(", ")
+
+  // 1. Opener grounded in their current Fall courses
+  talkingPoints.push(
+    `I see you're taking ${inProgressCourseList} this fall -- how are those going? Anything that's been tougher than expected, or a class you're really enjoying? That helps me understand how you're feeling heading into Spring.`
+  )
+
+  // 2. Light load: specific to their hours vs. what's needed
+  if (totalHrs < STANDARD_MIN && totalHrs > 0) {
+    talkingPoints.push(
+      `I noticed you're planning ${totalHrs} hours for Spring, which is lighter than your usual pace. Is there something going on next semester -- work, personal commitments -- that you're pulling back for? And do you think you'd feel comfortable ramping back up to ${hrsPerSemNeeded > 15 ? hrsPerSemNeeded : 15}-ish hours per semester after that? With ${remaining} hours still to go, I want to make sure we keep Spring 2028 graduation within reach.`
+    )
   }
 
+  // 3. Heavy load: specific to their hours and GPA
+  if (totalHrs > STANDARD_MAX) {
+    talkingPoints.push(
+      `Your plan comes in at ${totalHrs} hours, which is above the standard 17-hour cap. Your ${STUDENT.gpa} GPA qualifies you for the overload, but I'd like to hear what your week looks like -- are you working, involved in anything? Sometimes ${totalHrs} hours looks fine on paper but feels different when you're living it. If we need to, which course would you feel most comfortable moving to Fall 2027?`
+    )
+  }
+
+  // 4. Prerequisite issues: specific course names
   if (failCount > 0) {
-    talkingPoints.push(`Let's walk through the ${failCount > 1 ? "courses" : "course"} with prerequisite issues -- I want to make sure we find the right replacement${failCount > 1 ? "s" : ""} and you understand what's needed.`)
+    const failedCourses = courses.filter(c => c.status === "fail")
+    const failNames = failedCourses.map(c => `${c.code} (${c.name})`).join(" and ")
+    talkingPoints.push(
+      `Let's talk about ${failNames} -- the prerequisite${failCount > 1 ? "s aren't" : " isn't"} met yet, so we'll need to find ${failCount > 1 ? "alternatives" : "an alternative"}. Walk me through your thinking on why you picked ${failCount > 1 ? "those" : "that"} -- it'll help me suggest something that still fits what you're going for.`
+    )
   }
 
+  // 5. Finance minor timing: specific to their progress
   if (finProgress && finProgress.value < 15) {
-    talkingPoints.push(`Let's map out your Finance minor semester-by-semester -- you need ${15 - finProgress.value} more hours, and we should make sure the courses you want are actually offered when you need them.`)
+    const finHrsLeft = 15 - finProgress.value
+    if (finn30103Planned) {
+      talkingPoints.push(
+        `Good move starting FINN 30103 this spring -- that unlocks the rest of the Finance minor. You'll still need ${finHrsLeft - 3} more hours across Fall 2027 and Spring 2028, so about 2 FINN courses per semester. What's drawing you to Finance? That'll help me recommend which specific courses to prioritize, especially if some are only offered certain semesters.`
+      )
+    } else if (!completedCourses.has("FINN 30103")) {
+      talkingPoints.push(
+        `I want to check in on the Finance minor -- you still need ${finHrsLeft} hours, and FINN 30103 is the gateway that unlocks everything else. Without it this spring, you'd need to fit all ${finHrsLeft} hours into your last two semesters. Is the minor still something you're committed to, or has your thinking shifted? Either way is fine, I just want to make sure we're planning for the right target.`
+      )
+    }
   }
 
-  if (totalHrs > 17) {
-    talkingPoints.push(`Your plan is ${totalHrs} hours, which is above the standard max. Let's talk about whether that's realistic given everything else on your plate, or if we should trim one course.`)
+  // 6. Natural science gap: specific degree requirement
+  if (sciProgress && sciProgress.courses?.some(c => c.code.includes("Science") && c.status === "remaining")) {
+    talkingPoints.push(
+      `One thing I want to flag -- you still need the Natural Science lecture + lab (4 hours) for State Minimum Core. Labs have limited time slots, so the longer you wait the harder it gets to fit into your schedule. Were you thinking about doing that Fall 2027, or is there a reason you're holding off? Sometimes students have a specific science they want to take, and we can plan around that.`
+    )
   }
 
-  if (remaining > 0 && remaining < 30) {
-    talkingPoints.push(`You have ${remaining} hours left to graduate -- let's make sure your remaining semesters are balanced and you're not scrambling at the end.`)
+  // 7. Conditional courses: grounded in specific Fall prereqs
+  if (conditionalCount > 0) {
+    const condCourses = courses.filter(c => c.status === "conditional")
+    const condNames = condCourses.map(c => c.code).join(", ")
+    const prereqSemester = "Fall 2026"
+    talkingPoints.push(
+      `${condNames} ${conditionalCount > 1 ? "are" : "is"} conditional on finishing ${prereqSemester} courses with a C or better. How are you feeling about those classes right now? If any of them are borderline, we should have a backup plan so you're not scrambling during Spring registration.`
+    )
   }
 
-  // Limit to 5
+  // 8. Graduation pacing
+  if (remaining > 0 && remaining <= 40 && talkingPoints.length < 5) {
+    talkingPoints.push(
+      `You've got ${remaining} hours left to hit 120 for graduation. That works out to roughly ${hrsPerSemNeeded} hours per semester through Spring 2028. Does that pacing feel right to you, or are there semesters where you'd want to go heavier or lighter? I'd rather we plan that now than have a surprise 19-hour final semester.`
+    )
+  }
+
+  // Limit to 5, keeping the opener plus the most relevant substance
   if (talkingPoints.length > 5) talkingPoints.length = 5
 
   // Questions for "Ask a Question" email
