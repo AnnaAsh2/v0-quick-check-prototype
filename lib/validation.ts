@@ -1222,19 +1222,38 @@ function generateSuggestion(
 /*  Graduation timeline                                                */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/*  Timeline helper types                                               */
+/* ------------------------------------------------------------------ */
+
+interface TimelineCourse {
+  code: string
+  name: string
+  hrs: number
+  note?: string
+  /** prerequisite codes that must be completed before this course */
+  prereqsNeeded: string[]
+  /** co-requisite codes that can be taken same semester */
+  coreqCodes: string[]
+  /** which requirement bucket this satisfies */
+  bucket: string
+}
+
+/**
+ * Build the best-case semester-by-semester path to graduation.
+ *
+ * Strategy:
+ * 1. Gather every remaining course the student still needs (after completed + IP + planned Spring 2027).
+ * 2. Model two future semesters (Fall 2027, Spring 2028).
+ * 3. Try multiple scheduling permutations -- shift courses between semesters,
+ *    then score each arrangement by counting errors/warnings (overloads,
+ *    concentration imbalances, prerequisite violations).
+ * 4. Return the arrangement with the lowest penalty score.
+ */
 function computeTimeline(planned: Course[]): SemesterPlan[] {
   const plannedCodes = new Set(planned.map(c => c.code))
-  const hasFinn30103 = plannedCodes.has("FINN 30103")
-  const hasEcon43303 = plannedCodes.has("ECON 43303")
-  const hasEcon31303 = plannedCodes.has("ECON 31303")
-  const hasEcon47403 = plannedCodes.has("ECON 47403")
-  const hasSevi = plannedCodes.has("SEVI 30103")
-  // Check which science is planned
-  const sciLecture = ["ASTR 10003", "ENSC 10003", "PHYS 10103"].find(c => plannedCodes.has(c))
-  const sciLab = sciLecture ? { "ASTR 10003": "ASTR 10001", "ENSC 10003": "ENSC 10001", "PHYS 10103": "PHYS 10101" }[sciLecture] : null
-  const genElecPlanned = ["COMM 13003", "PSYC 21003", "SOCI 20003", "PHIL 32003", "GEOS 10003", "ANTH 10003"].find(c => plannedCodes.has(c))
 
-  // ---- SPRING 2027 (current plan) ----
+  /* --- Spring 2027 (locked -- this is the student's current plan) --- */
   const spring27: SemesterPlan = {
     label: "Spring 2027 (Your Current Plan)",
     courses: planned.map(c => ({ code: c.code, name: c.name, hrs: c.hrs })),
@@ -1243,176 +1262,327 @@ function computeTimeline(planned: Course[]): SemesterPlan[] {
   }
   if (spring27.totalHrs > 17) {
     spring27.flags.push({ type: "warning", message: `${spring27.totalHrs} hours exceeds the standard 17-hour limit. Requires GPA 2.75+ and advisor approval.` })
-  }
-  if (spring27.totalHrs < 12) {
+  } else if (spring27.totalHrs > 0 && spring27.totalHrs < 12) {
     spring27.flags.push({ type: "info", message: `Only ${spring27.totalHrs} hours -- below full-time (12 hrs). May affect financial aid.` })
   }
 
-  // ---- Determine what's left after Spring 2027 ----
-  // Remaining required courses
-  const needEcon31303 = !hasEcon31303 && !completedCourses.has("ECON 31303") && !inProgressFall2026.has("ECON 31303")
-  const needEcon43303 = !hasEcon43303 && !completedCourses.has("ECON 43303") && !inProgressFall2026.has("ECON 43303")
-  const needEcon47403 = !hasEcon47403 && !completedCourses.has("ECON 47403") && !inProgressFall2026.has("ECON 47403")
-  const needSevi = !hasSevi && !completedCourses.has("SEVI 30103") && !inProgressFall2026.has("SEVI 30103")
-  const needScience = !sciLecture
-  const needGenElec = !genElecPlanned && !completedCourses.has("COMM 13003") && !completedCourses.has("PSYC 21003")
+  /* --- Build "done after Spring 2027" set (assumes all pass) --- */
+  const doneAfterSpring27 = new Set([...completedCourses, ...inProgressFall2026, ...plannedCodes])
 
-  // Finance minor: 15 hrs needed, see what's planned
-  const finCodesPlanned = planned.filter(c => c.code.startsWith("FINN") && parseInt(c.code.split(" ")[1]) >= 30000)
-  const finHrsPlanned = finCodesPlanned.reduce((s, c) => s + c.hrs, 0)
-  const finHrsRemaining = Math.max(0, 15 - finHrsPlanned)
+  /* --- Collect every remaining course needed for all degree requirements --- */
+  const remaining: TimelineCourse[] = []
+  const alreadyAdded = new Set<string>()
 
-  // ECON elective hrs still needed after this semester
-  const econElecPlanned = planned.filter(c => c.code.startsWith("ECON") && parseInt(c.code.split(" ")[1]) >= 30000 &&
-    !["ECON 30303", "ECON 31303", "ECON 43303", "ECON 47403"].includes(c.code))
-  const econElecHrsAfterSpring = Math.max(0, 6 - (3 + econElecPlanned.reduce((s, c) => s + c.hrs, 0))) // 3 = ECON 34303 IP
-
-  // Jr/Sr elective hrs remaining
-  const jrSrFromFinMinor = finHrsPlanned // Finance minor courses count
-  const jrSrOther = planned.filter(c => {
-    const num = parseInt(c.code.split(" ")[1])
-    const prefix = c.code.split(" ")[0]
-    const jrSrPrefixes = ["ACCT", "BLAW", "ECON", "FINN", "ISYS", "MGMT", "MKTG", "SCMT", "SEVI", "BUSI"]
-    const excluded = new Set(["ECON 30303", "ECON 31303", "ECON 47403", "ECON 43303", "ECON 47503", "SEVI 30103", "MKTG 34303", "ECON 30503", "ECON 30603", "MGMT 35603"])
-    return num >= 30000 && jrSrPrefixes.includes(prefix) && !excluded.has(c.code) && !c.code.startsWith("FINN")
-  }).reduce((s, c) => s + c.hrs, 0)
-  const jrSrHrsRemaining = Math.max(0, 12 - jrSrFromFinMinor - jrSrOther)
-
-  // ---- FALL 2027 ----
-  const fall27Courses: { code: string; name: string; hrs: number; note?: string }[] = []
-  const fall27Flags: { type: "info" | "warning" | "error"; message: string }[] = []
-
-  // ECON 43303 if not taken in Spring (needs ECON 30303 which will be done by then)
-  if (needEcon43303) {
-    fall27Courses.push({ code: "ECON 43303", name: "Economics of Organizations", hrs: 3, note: "Prereq ECON 30303 will be completed" })
-  }
-  // ECON 31303 if deferred
-  if (needEcon31303) {
-    fall27Courses.push({ code: "ECON 31303", name: "Macroeconomic Theory", hrs: 3, note: "Critical required course" })
-  }
-  // ECON 47403 if deferred
-  if (needEcon47403) {
-    fall27Courses.push({ code: "ECON 47403", name: "Intro to Econometrics", hrs: 4, note: "Core quantitative methods" })
-  }
-  // SEVI 30103 if deferred
-  if (needSevi) {
-    fall27Courses.push({ code: "SEVI 30103", name: "Strategic Management", hrs: 3, note: "Business Core capstone" })
+  function addIfNeeded(code: string, name: string, hrs: number, bucket: string, note?: string) {
+    if (doneAfterSpring27.has(code) || alreadyAdded.has(code)) return
+    const cat = catalog[code]
+    remaining.push({
+      code, name, hrs,
+      prereqsNeeded: cat?.prereqs?.filter(p => !doneAfterSpring27.has(p)) || [],
+      coreqCodes: cat?.coreqs || [],
+      bucket,
+      note,
+    })
+    alreadyAdded.add(code)
   }
 
-  // Finance minor -- need 2-3 courses per semester
-  const finFall27Count = Math.min(2, Math.ceil(finHrsRemaining / 3))
-  if (finHrsRemaining > 0 && hasFinn30103) {
-    // FINN 30103 done in Spring, can now take courses requiring it
-    const finOptions = ["FINN 30603", "FINN 36003", "FINN 31003", "FINN 31303", "FINN 37003"]
-    let added = 0
-    for (const fc of finOptions) {
-      if (added >= finFall27Count) break
-      if (!plannedCodes.has(fc) && !completedCourses.has(fc)) {
-        const cat = catalog[fc]
-        fall27Courses.push({ code: fc, name: cat?.name || fc, hrs: 3, note: "Finance minor" })
-        added++
+  // Business Core
+  addIfNeeded("SEVI 30103", "Strategic Management", 3, "Business Core", "Capstone -- requires all business core courses completed")
+
+  // Economics Major Required
+  addIfNeeded("ECON 31303", "Macroeconomic Theory", 3, "Econ Required", "Core macro theory")
+  addIfNeeded("ECON 43303", "Economics of Organizations", 3, "Econ Required", "Requires ECON 30303")
+  addIfNeeded("ECON 47403", "Intro to Econometrics", 4, "Econ Required", "Core quantitative methods (4 hrs)")
+
+  // Economics Electives -- need ~6 more hrs after ECON 34303 IP (3 hrs)
+  const econElecIpHrs = inProgressFall2026.has("ECON 34303") ? 3 : 0
+  const econElecFromPlanned = planned.filter(c => c.code.startsWith("ECON") && parseInt(c.code.split(" ")[1]) >= 30000 &&
+    !["ECON 30303", "ECON 31303", "ECON 43303", "ECON 47403"].includes(c.code)).reduce((s, c) => s + c.hrs, 0)
+  const econElecStillNeeded = Math.max(0, 9 - econElecIpHrs - econElecFromPlanned) // need 9 total, have IP + planned
+  const econElecPool = ["ECON 46303", "ECON 35303", "ECON 44203", "ECON 33303", "ECON 38403", "ECON 46403"]
+  let econElecAdded = 0
+  for (const ec of econElecPool) {
+    if (econElecAdded * 3 >= econElecStillNeeded) break
+    addIfNeeded(ec, catalog[ec]?.name || ec, 3, "Econ Elective")
+    econElecAdded++
+  }
+
+  // Finance Minor -- 15 hrs needed, see what's been planned this semester
+  const finSpring27Hrs = planned.filter(c => c.code.startsWith("FINN") && parseInt(c.code.split(" ")[1]) >= 30000).reduce((s, c) => s + c.hrs, 0)
+  const finStillNeeded = Math.max(0, 15 - finSpring27Hrs)
+  if (finStillNeeded > 0) {
+    addIfNeeded("FINN 30103", "Financial Analysis", 3, "Finance Minor", "Gateway -- unlocks upper-level FINN")
+    const finPool = ["FINN 30603", "FINN 36003", "FINN 31003", "FINN 31303", "FINN 37003", "FINN 30003", "FINN 36203"]
+    let finAdded = (alreadyAdded.has("FINN 30103") ? 1 : 0)
+    for (const fc of finPool) {
+      if (finAdded * 3 >= finStillNeeded) break
+      addIfNeeded(fc, catalog[fc]?.name || fc, 3, "Finance Minor")
+      finAdded++
+    }
+  }
+
+  // State Min Core -- Natural Science (4 hrs: lecture + lab)
+  const sciInPlan = ["ASTR 10003", "ENSC 10003", "PHYS 10103"].some(c => plannedCodes.has(c))
+  if (!sciInPlan) {
+    remaining.push({ code: "ASTR 10003", name: "Survey of Astronomy", hrs: 3, prereqsNeeded: [], coreqCodes: ["ASTR 10001"], bucket: "State Min Core", note: "Natural Science lecture" })
+    remaining.push({ code: "ASTR 10001", name: "Astronomy Lab", hrs: 1, prereqsNeeded: [], coreqCodes: ["ASTR 10003"], bucket: "State Min Core", note: "Matching lab" })
+    alreadyAdded.add("ASTR 10003")
+    alreadyAdded.add("ASTR 10001")
+  }
+
+  // General Electives -- need 3 more hrs (COMM 12003 already done = 3 of 6)
+  const genElecPlanned = ["COMM 13003", "PSYC 21003", "SOCI 20003", "PHIL 32003", "GEOS 10003", "ANTH 10003"].some(c => plannedCodes.has(c))
+  if (!genElecPlanned) {
+    addIfNeeded("COMM 13003", "Interpersonal Communication", 3, "Gen Elective", "Builds on COMM 12003 (completed)")
+  }
+
+  // Jr/Sr Business Electives -- 12 hrs required. Finance minor courses count.
+  // Count how many Jr/Sr hrs we already have from planned + the remaining finance courses we just added.
+  const majorOrCoreCodes = new Set(["ECON 30303", "ECON 31303", "ECON 47403", "ECON 43303", "ECON 47503", "SEVI 30103", "MKTG 34303"])
+  const jrSrPrefixes = new Set(["ACCT", "BLAW", "ECON", "FINN", "ISYS", "MGMT", "MKTG", "SCMT", "SEVI", "BUSI"])
+  const jrSrExcluded = new Set(["ECON 30503", "ECON 30603", "MGMT 35603"])
+
+  function isJrSr(code: string, hrs: number): boolean {
+    const [prefix, numStr] = code.split(" ")
+    const num = parseInt(numStr)
+    return num >= 30000 && jrSrPrefixes.has(prefix) && !majorOrCoreCodes.has(code) && !jrSrExcluded.has(code)
+  }
+
+  const jrSrFromPlanned = planned.filter(c => isJrSr(c.code, c.hrs)).reduce((s, c) => s + c.hrs, 0)
+  const jrSrFromRemaining = remaining.filter(c => isJrSr(c.code, c.hrs)).reduce((s, c) => s + c.hrs, 0)
+  const jrSrTotalProjected = jrSrFromPlanned + jrSrFromRemaining
+  const jrSrGap = Math.max(0, 12 - jrSrTotalProjected)
+
+  // If there's a gap, add additional Jr/Sr courses
+  if (jrSrGap > 0) {
+    const extraJrSr = ["MGMT 42503", "ISYS 41903", "BLAW 30303", "MKTG 38303"]
+    let jrSrFilled = 0
+    for (const jc of extraJrSr) {
+      if (jrSrFilled >= jrSrGap) break
+      addIfNeeded(jc, catalog[jc]?.name || jc, 3, "Jr/Sr Elective")
+      jrSrFilled += 3
+    }
+  }
+
+  // Check total hours to reach 120
+  const hrsAfterSpring27 = STUDENT.hoursCompleted + STUDENT.hoursInProgress + spring27.totalHrs
+  const remainingTotalHrs = remaining.reduce((s, c) => s + c.hrs, 0)
+  const projectedTotal = hrsAfterSpring27 + remainingTotalHrs
+  const totalGap = Math.max(0, 120 - projectedTotal)
+  if (totalGap > 0) {
+    remaining.push({ code: "Free Elective", name: "Additional elective", hrs: totalGap, prereqsNeeded: [], coreqCodes: [], bucket: "Total Hours", note: `${totalGap} hrs needed to reach 120` })
+  }
+
+  /* --------------------------------------------------------------- */
+  /*  Schedule optimizer: try permutations and pick best arrangement  */
+  /* --------------------------------------------------------------- */
+
+  type Slot = { code: string; name: string; hrs: number; note?: string }
+
+  /** Can a course be placed in a semester given which courses will be done before it? */
+  function canPlace(course: TimelineCourse, doneBeforeSem: Set<string>, sameSem: Set<string>): boolean {
+    for (const p of course.prereqsNeeded) {
+      if (!doneBeforeSem.has(p)) return false
+    }
+    for (const co of course.coreqCodes) {
+      if (!doneBeforeSem.has(co) && !sameSem.has(co) && !alreadyAdded.has(co)) { /* ok if co isn't needed */ }
+    }
+    return true
+  }
+
+  /** Score a 2-semester arrangement: lower is better */
+  function scorePlan(fall: Slot[], spring: Slot[]): { score: number; flags: { sem: number; type: "info" | "warning" | "error"; message: string }[] } {
+    const flags: { sem: number; type: "info" | "warning" | "error"; message: string }[] = []
+    let score = 0
+
+    const fallHrs = fall.reduce((s, c) => s + c.hrs, 0)
+    const springHrs = spring.reduce((s, c) => s + c.hrs, 0)
+
+    // Overload checks
+    if (fallHrs > 19) { score += 100; flags.push({ sem: 0, type: "error", message: `${fallHrs} hours exceeds the absolute 19-hour maximum. This schedule is not feasible.` }) }
+    else if (fallHrs > 17) { score += 10; flags.push({ sem: 0, type: "warning", message: `${fallHrs} hours is above the standard 17-hour limit. Requires GPA 2.75+ and advisor approval.` }) }
+
+    if (springHrs > 19) { score += 100; flags.push({ sem: 1, type: "error", message: `${springHrs} hours exceeds the absolute 19-hour maximum. This schedule is not feasible.` }) }
+    else if (springHrs > 17) { score += 5; flags.push({ sem: 1, type: "warning", message: `${springHrs} hours in final semester is above standard limit. Seniors may take up to 19 hrs with dean approval.` }) }
+
+    // Underload checks
+    if (fallHrs > 0 && fallHrs < 12) { score += 3; flags.push({ sem: 0, type: "info", message: `Only ${fallHrs} hours -- below full-time (12 hrs). May affect financial aid.` }) }
+    if (springHrs > 0 && springHrs < 12) { score += 3; flags.push({ sem: 1, type: "info", message: `Only ${springHrs} hours -- below full-time (12 hrs). May affect financial aid.` }) }
+
+    // Balance penalty -- prefer even distribution
+    const diff = Math.abs(fallHrs - springHrs)
+    if (diff > 4) { score += 3; flags.push({ sem: diff > 0 ? 0 : 1, type: "info", message: `Semesters are unbalanced (${fallHrs} vs ${springHrs} hrs). Consider evening out the load.` }) }
+
+    // Finance concentration in final semester
+    const finSpring = spring.filter(c => c.code.startsWith("FINN")).length
+    if (finSpring >= 3) {
+      score += 8
+      flags.push({ sem: 1, type: "warning", message: `${finSpring} finance courses in your final semester creates a finance-heavy load. Consider moving a finance course to Fall 2027.` })
+    }
+
+    // ECON concentration check -- too many upper-ECON in one semester
+    const econFall = fall.filter(c => c.code.startsWith("ECON") && parseInt(c.code.split(" ")[1] || "0") >= 40000).length
+    if (econFall >= 3) {
+      score += 5
+      flags.push({ sem: 0, type: "warning", message: `${econFall} upper-level ECON courses in one semester is a heavy analytical workload.` })
+    }
+
+    // FINN 30103 not taken until Spring 2028 creates cascading problem
+    const finn30103InSpring = spring.some(c => c.code === "FINN 30103")
+    if (finn30103InSpring) {
+      score += 20
+      flags.push({ sem: 1, type: "error", message: "FINN 30103 in your final semester means courses requiring it (FINN 30603, FINN 36003) cannot be completed. The Finance minor will not be finishable on time." })
+    }
+
+    return { score, flags }
+  }
+
+  /**
+   * Generate a valid arrangement: assign courses to Fall vs Spring respecting prerequisites.
+   * `preference` is an array of course codes to push to Spring if possible (to try different combos).
+   */
+  function buildArrangement(preferSpring: Set<string>): { fall: Slot[]; spring: Slot[] } | null {
+    const fall: Slot[] = []
+    const spring: Slot[] = []
+    const fallCodes = new Set<string>()
+    const springCodes = new Set<string>()
+    const doneAfterFall = new Set(doneAfterSpring27)
+
+    // Sort: courses with no prereqs first, then by bucket priority
+    const bucketPriority: Record<string, number> = {
+      "Business Core": 1, "Econ Required": 2, "Finance Minor": 3,
+      "Econ Elective": 4, "Jr/Sr Elective": 5, "State Min Core": 6,
+      "Gen Elective": 7, "Total Hours": 8,
+    }
+    const sorted = [...remaining].sort((a, b) => {
+      const pa = bucketPriority[a.bucket] || 9
+      const pb = bucketPriority[b.bucket] || 9
+      if (a.prereqsNeeded.length !== b.prereqsNeeded.length) return a.prereqsNeeded.length - b.prereqsNeeded.length
+      return pa - pb
+    })
+
+    // First pass: assign to Fall or Spring
+    const deferred: TimelineCourse[] = []
+    for (const course of sorted) {
+      const canFall = canPlace(course, doneAfterSpring27, fallCodes)
+
+      if (preferSpring.has(course.code) && canFall) {
+        // Preference to defer -- check if Spring is still valid
+        deferred.push(course)
+        continue
+      }
+
+      if (canFall) {
+        fall.push({ code: course.code, name: course.name, hrs: course.hrs, note: course.note })
+        fallCodes.add(course.code)
+        doneAfterFall.add(course.code)
+      } else {
+        deferred.push(course)
       }
     }
-  } else if (finHrsRemaining > 0 && !hasFinn30103) {
-    // No FINN 30103 yet -- must take it Fall 2027
-    fall27Courses.push({ code: "FINN 30103", name: "Financial Analysis", hrs: 3, note: "Required gateway for Finance minor" })
-    fall27Flags.push({ type: "warning", message: "Finance minor is delayed because FINN 30103 is not in your Spring 2027 plan. Starting it in Fall 2027 means you'll need 12 hrs of finance in your final 2 semesters." })
-    if (finFall27Count > 1) {
-      fall27Courses.push({ code: "FINN 31003", name: "Financial Modeling", hrs: 3, note: "Only needs FINN 20403 (completed)" })
-    }
-  }
 
-  // ECON elective if needed
-  if (econElecHrsAfterSpring > 0) {
-    fall27Courses.push({ code: "ECON Elective", name: "ECON 3000/4000-level elective", hrs: 3, note: "Choose from available options" })
-  }
-
-  // Science if not taken
-  if (needScience) {
-    fall27Courses.push({ code: "ASTR 10003", name: "Survey of Astronomy", hrs: 3, note: "Natural Science requirement" })
-    fall27Courses.push({ code: "ASTR 10001", name: "Astronomy Lab", hrs: 1, note: "Matching lab" })
-  }
-
-  // General elective if needed
-  if (needGenElec) {
-    fall27Courses.push({ code: "Gen Elective", name: "General elective", hrs: 3, note: "Any elective course" })
-  }
-
-  const fall27Total = fall27Courses.reduce((s, c) => s + c.hrs, 0)
-  if (fall27Total > 17) {
-    fall27Flags.push({ type: "warning", message: `Projected ${fall27Total} hours is above the standard 17-hour limit. Some courses may need to shift to Spring 2028.` })
-  }
-  if (fall27Total > 19) {
-    fall27Flags.push({ type: "error", message: `Projected ${fall27Total} hours exceeds the absolute maximum. This schedule is not feasible.` })
-  }
-
-  const fall27: SemesterPlan = { label: "Fall 2027 (Projected)", courses: fall27Courses, totalHrs: fall27Total, flags: fall27Flags }
-
-  // ---- SPRING 2028 (Final Semester) ----
-  const spring28Courses: { code: string; name: string; hrs: number; note?: string }[] = []
-  const spring28Flags: { type: "info" | "warning" | "error"; message: string }[] = []
-
-  // Remaining Finance minor after Fall 2027
-  const finHrsAfterFall27 = Math.max(0, finHrsRemaining - (finFall27Count * 3))
-  const finSpring28Count = Math.ceil(finHrsAfterFall27 / 3)
-  if (finHrsAfterFall27 > 0) {
-    const finLateOptions = ["FINN 30603", "FINN 36003", "FINN 31003", "FINN 31303", "FINN 37003", "FINN 30003", "FINN 36203"]
-    let added = 0
-    for (const fc of finLateOptions) {
-      if (added >= finSpring28Count) break
-      if (!plannedCodes.has(fc) && !completedCourses.has(fc) && !fall27Courses.some(c => c.code === fc)) {
-        const cat = catalog[fc]
-        spring28Courses.push({ code: fc, name: cat?.name || fc, hrs: 3, note: "Finance minor completion" })
-        added++
+    // Assign deferred courses to Spring (they either need Fall prereqs or were preference-deferred)
+    for (const course of deferred) {
+      const canSpring = canPlace(course, doneAfterFall, springCodes)
+      if (canSpring) {
+        spring.push({ code: course.code, name: course.name, hrs: course.hrs, note: course.note })
+        springCodes.add(course.code)
+      } else {
+        // Try moving to Fall after all
+        const canFallNow = canPlace(course, doneAfterSpring27, fallCodes)
+        if (canFallNow) {
+          fall.push({ code: course.code, name: course.name, hrs: course.hrs, note: course.note })
+          fallCodes.add(course.code)
+          doneAfterFall.add(course.code)
+        } else {
+          // Cannot place -- this is a problem
+          spring.push({ code: course.code, name: course.name, hrs: course.hrs, note: `${course.note || ""} (prereq may not be met)`.trim() })
+          springCodes.add(course.code)
+        }
       }
     }
+
+    // Handle co-requisites: ASTR 10003 + 10001 must be in same semester
+    const coReqPairs = [["ASTR 10003", "ASTR 10001"], ["ENSC 10003", "ENSC 10001"], ["PHYS 10103", "PHYS 10101"]]
+    for (const [a, b] of coReqPairs) {
+      const aInFall = fall.some(c => c.code === a)
+      const bInSpring = spring.some(c => c.code === b)
+      if (aInFall && bInSpring) {
+        // Move b to Fall
+        const idx = spring.findIndex(c => c.code === b)
+        if (idx >= 0) {
+          fall.push(spring[idx])
+          spring.splice(idx, 1)
+        }
+      }
+      const aInSpring = spring.some(c => c.code === a)
+      const bInFall = fall.some(c => c.code === b)
+      if (aInSpring && bInFall) {
+        const idx = fall.findIndex(c => c.code === b)
+        if (idx >= 0) {
+          spring.push(fall[idx])
+          fall.splice(idx, 1)
+        }
+      }
+    }
+
+    return { fall, spring }
   }
 
-  // Jr/Sr elective hours if still needed
-  if (jrSrHrsRemaining > 0) {
-    const jrSrNeeded = Math.ceil(jrSrHrsRemaining / 3)
-    let jrSrAdded = 0
-    const jrSrLateOptions = ["BLAW 30303", "ISYS 41903", "MGMT 42503", "SEVI 39303", "MKTG 38303"]
-    for (const jc of jrSrLateOptions) {
-      if (jrSrAdded >= jrSrNeeded) break
-      if (!plannedCodes.has(jc) && !completedCourses.has(jc) && !fall27Courses.some(c => c.code === jc) && !spring28Courses.some(c => c.code === jc)) {
-        const cat = catalog[jc]
-        spring28Courses.push({ code: jc, name: cat?.name || jc, hrs: 3, note: "Jr/Sr business elective" })
-        jrSrAdded++
-      }
+  /* --- Try multiple permutations --- */
+
+  // Courses that could be deferred to Spring to create different arrangements
+  const deferCandidates = remaining
+    .filter(c => c.prereqsNeeded.length === 0 && c.code !== "FINN 30103") // never defer FINN 30103
+    .map(c => c.code)
+
+  // Generate permutations: no deferrals, then try deferring 1-2 courses at a time
+  const permutations: Set<string>[] = [new Set()]
+  for (const code of deferCandidates.slice(0, 6)) {
+    permutations.push(new Set([code]))
+  }
+  for (let i = 0; i < Math.min(deferCandidates.length, 5); i++) {
+    for (let j = i + 1; j < Math.min(deferCandidates.length, 6); j++) {
+      permutations.push(new Set([deferCandidates[i], deferCandidates[j]]))
     }
   }
 
-  // Any remaining ECON electives
-  if (econElecHrsAfterSpring > 3) {
-    spring28Courses.push({ code: "ECON Elective", name: "ECON 3000/4000-level elective", hrs: 3, note: "Final ECON elective slot" })
+  let bestFall: Slot[] = []
+  let bestSpring: Slot[] = []
+  let bestScore = Infinity
+  let bestFlags: { sem: number; type: "info" | "warning" | "error"; message: string }[] = []
+
+  for (const pref of permutations) {
+    const arrangement = buildArrangement(pref)
+    if (!arrangement) continue
+    const { score, flags } = scorePlan(arrangement.fall, arrangement.spring)
+    if (score < bestScore) {
+      bestScore = score
+      bestFall = arrangement.fall
+      bestSpring = arrangement.spring
+      bestFlags = flags
+    }
   }
 
-  const spring28Total = spring28Courses.reduce((s, c) => s + c.hrs, 0)
+  /* --- Build semester plans from best arrangement --- */
+  const fall27Flags = bestFlags.filter(f => f.sem === 0).map(f => ({ type: f.type, message: f.message }))
+  const spring28Flags = bestFlags.filter(f => f.sem === 1).map(f => ({ type: f.type, message: f.message }))
 
-  // Check for finance-heavy final semester
-  const finCoursesSpring28 = spring28Courses.filter(c => c.code.startsWith("FINN")).length
-  if (finCoursesSpring28 >= 3) {
-    spring28Flags.push({ type: "warning", message: `${finCoursesSpring28} finance courses in your final semester creates a finance-heavy load. Consider distributing finance courses more evenly.` })
-  }
+  const fall27Total = bestFall.reduce((s, c) => s + c.hrs, 0)
+  const spring28Total = bestSpring.reduce((s, c) => s + c.hrs, 0)
 
-  // Check overall feasibility
-  const totalHrsAfterAll = STUDENT.hoursCompleted + STUDENT.hoursInProgress + spring27.totalHrs + fall27Total + spring28Total
+  // Overall hours check
+  const totalHrsAfterAll = hrsAfterSpring27 + fall27Total + spring28Total
   if (totalHrsAfterAll < 120) {
     const gap = 120 - totalHrsAfterAll
     spring28Flags.push({ type: "error", message: `Still ${gap} credit hours short of the 120-hour graduation requirement. May need additional courses or a summer session.` })
-    // Add filler if gap is small
-    if (gap <= 6) {
-      spring28Courses.push({ code: "Additional", name: "Additional hours needed", hrs: gap, note: `${gap} more hours to reach 120` })
-    }
-  }
-  if (spring28Total > 17) {
-    spring28Flags.push({ type: "warning", message: `Projected ${spring28Total} hours in final semester is above standard limit. Seniors may take up to 19 hrs with dean approval.` })
   }
 
+  // Info flag on final semester
   spring28Flags.push({ type: "info", message: "This is the target graduation semester (Spring 2028). All degree requirements must be completed." })
 
-  const spring28: SemesterPlan = { label: "Spring 2028 (Final Semester)", courses: spring28Courses, totalHrs: spring28Total, flags: spring28Flags }
+  const fall27: SemesterPlan = { label: "Fall 2027 (Best Case)", courses: bestFall, totalHrs: fall27Total, flags: fall27Flags }
+  const spring28: SemesterPlan = { label: "Spring 2028 (Final Semester)", courses: bestSpring, totalHrs: spring28Total, flags: spring28Flags }
 
   return [spring27, fall27, spring28]
 }

@@ -320,7 +320,7 @@ export function ScreenResults({
           Graduation Timeline
         </div>
         <p className="text-sm text-muted-foreground leading-relaxed">
-          Best-case semester-by-semester path to Spring 2028 graduation, with prerequisite sequencing and requirements factored in.
+          Best-case scenario to Spring 2028 graduation. We modeled multiple course arrangements across your remaining semesters -- optimizing for balanced loads, prerequisite sequencing, and minimal scheduling conflicts -- and selected the arrangement with the fewest issues.
         </p>
         <div className="flex flex-col gap-4">
           {result.timeline.map((sem, i) => (
