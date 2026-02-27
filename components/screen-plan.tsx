@@ -10,7 +10,7 @@ import {
 } from "lucide-react"
 import type { Course } from "@/lib/validation"
 import { buildRecommendations } from "@/lib/validation"
-import type { RequirementGroup, RecommendedCourse } from "@/lib/validation"
+import type { RequirementGroup, RecommendedCourse, SciencePair } from "@/lib/validation"
 
 /* ------------------------------------------------------------------ */
 /*  Full course catalogue for free-search mode                         */
@@ -58,6 +58,17 @@ const catalogue: Course[] = [
   { code: "ECON 30303", name: "Intermediate Microeconomics", hrs: 3, cat: "Economics Major (Required)" },
   { code: "FINN 20403", name: "Principles of Finance", hrs: 3, cat: "Business Core" },
   { code: "MKTG 34303", name: "Introduction to Marketing", hrs: 3, cat: "Business Core" },
+  // Science courses for State Minimum Core
+  { code: "BIOL 11003", name: "Biology for Majors", hrs: 3, cat: "State Minimum Core (Science)" },
+  { code: "BIOL 11001", name: "Biology for Majors Lab", hrs: 1, cat: "State Minimum Core (Science Lab)" },
+  { code: "CHEM 10003", name: "Fundamentals of Chemistry", hrs: 3, cat: "State Minimum Core (Science)" },
+  { code: "CHEM 10001", name: "Fundamentals of Chemistry Lab", hrs: 1, cat: "State Minimum Core (Science Lab)" },
+  { code: "PHYS 10003", name: "Intro to Physics", hrs: 3, cat: "State Minimum Core (Science)" },
+  { code: "PHYS 10001", name: "Intro to Physics Lab", hrs: 1, cat: "State Minimum Core (Science Lab)" },
+  // General electives
+  { code: "COMM 13003", name: "Interpersonal Communication", hrs: 3, cat: "General Elective" },
+  { code: "PSYC 21003", name: "Abnormal Psychology", hrs: 3, cat: "General Elective" },
+  { code: "SOCI 20003", name: "Intro to Sociology", hrs: 3, cat: "General Elective" },
 ]
 
 /* ------------------------------------------------------------------ */
@@ -121,11 +132,21 @@ export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
   }
 
   const addFromRec = (rec: RecommendedCourse) => {
-    if (rec.code.includes("XXXX")) return // placeholder
     const existing = catalogue.find(c => c.code === rec.code)
     if (existing && !plannedCodes.has(existing.code)) {
       setPlanned(prev => [...prev, existing])
     }
+  }
+
+  const addPair = (lecture: RecommendedCourse, lab: RecommendedCourse) => {
+    const lec = catalogue.find(c => c.code === lecture.code)
+    const labC = catalogue.find(c => c.code === lab.code)
+    setPlanned(prev => {
+      const next = [...prev]
+      if (lec && !plannedCodes.has(lec.code)) next.push(lec)
+      if (labC && !plannedCodes.has(labC.code)) next.push(labC)
+      return next
+    })
   }
 
   // Analysis animation
@@ -262,6 +283,7 @@ export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
               group={group}
               plannedCodes={plannedCodes}
               onAdd={addFromRec}
+              onAddPair={addPair}
               catalogue={catalogue}
               onAddCourse={addCourse}
             />
@@ -358,12 +380,14 @@ function RequirementGroupCard({
   group,
   plannedCodes,
   onAdd,
+  onAddPair,
   catalogue,
   onAddCourse,
 }: {
   group: RequirementGroup
   plannedCodes: Set<string>
   onAdd: (rec: RecommendedCourse) => void
+  onAddPair: (lecture: RecommendedCourse, lab: RecommendedCourse) => void
   catalogue: Course[]
   onAddCourse: (c: Course) => void
 }) {
@@ -384,11 +408,9 @@ function RequirementGroupCard({
     return () => document.removeEventListener("mousedown", handleClick)
   }, [])
 
-  // Courses in this group that are already planned
   const plannedInGroup = group.courses.filter(c => plannedCodes.has(c.code)).length
   const pct = group.hoursNeeded > 0 ? Math.min(100, Math.round((group.hoursCompleted / (group.hoursCompleted + group.hoursNeeded)) * 100)) : 100
 
-  // For the group search: filter catalogue to courses relevant to this group requirement
   const groupSearchResults = searchQuery.trim().length > 0
     ? catalogue.filter(c =>
         !plannedCodes.has(c.code) &&
@@ -397,15 +419,16 @@ function RequirementGroupCard({
       )
     : []
 
-  // Partition courses into recommended (top 3 eligible) and rest
-  const eligibleCourses = group.courses.filter(c => c.eligible && !plannedCodes.has(c.code))
+  const eligibleCourses = group.courses.filter(c => c.eligible && !plannedCodes.has(c.code) && !c.linkedLecture)
   const ineligibleCourses = group.courses.filter(c => !c.eligible && !plannedCodes.has(c.code))
   const critical = eligibleCourses.filter(c => c.priority === "critical")
-  const recommended = eligibleCourses.filter(c => c.priority === "recommended").slice(0, 3)
+  const recommended = eligibleCourses.filter(c => c.priority === "recommended")
   const options = eligibleCourses.filter(c => c.priority === "option")
 
+  const isScience = group.id === "state-min-core" && group.sciencePairs && group.sciencePairs.length > 0
+
   return (
-    <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+    <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
       {/* Header */}
       <button
         onClick={() => setExpanded(!expanded)}
@@ -421,7 +444,7 @@ function RequirementGroupCard({
             )}
           </div>
           <div className="flex items-center gap-3">
-            <div className="h-1.5 flex-1 max-w-32 rounded-full bg-muted overflow-hidden">
+            <div className="h-1.5 max-w-32 flex-1 overflow-hidden rounded-full bg-muted">
               <div
                 className="h-full rounded-full bg-primary/70 transition-all"
                 style={{ width: `${pct}%` }}
@@ -441,101 +464,199 @@ function RequirementGroupCard({
 
       {/* Expanded content */}
       {expanded && (
-        <div className="border-t px-4 py-4 flex flex-col gap-3">
+        <div className="flex flex-col gap-3 border-t px-4 py-4">
           {group.description && (
-            <p className="text-xs text-muted-foreground leading-relaxed">{group.description}</p>
+            <p className="text-xs leading-relaxed text-muted-foreground">{group.description}</p>
           )}
 
-          {/* Critical courses - single select with prominent styling */}
-          {critical.length > 0 && (
-            <div className="flex flex-col gap-2">
-              {critical.map(c => (
-                <button
-                  key={c.code}
-                  onClick={() => onAdd(c)}
-                  disabled={plannedCodes.has(c.code) || c.code.includes("XXXX")}
-                  className="flex items-center gap-3 rounded-lg border-2 border-primary/20 bg-primary/[0.04] px-3.5 py-3 text-left transition-all hover:border-primary/40 hover:bg-primary/[0.08] disabled:opacity-50 disabled:cursor-default"
-                >
-                  <Sparkles className="h-4 w-4 shrink-0 text-primary" />
-                  <div className="flex flex-1 flex-col">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-foreground">{c.code}</span>
-                      <span className="text-sm text-foreground">{c.name}</span>
-                      <Badge className="border-primary/20 bg-primary/10 text-[10px] font-bold text-primary ml-auto">{c.hrs} hrs</Badge>
-                    </div>
-                    {c.note && <span className="mt-0.5 text-[11px] text-muted-foreground leading-relaxed">{c.note}</span>}
-                  </div>
-                  {plannedCodes.has(c.code) ? (
+          {/* ======================================================== */}
+          {/* SCIENCE PAIRS - special rendering with auto-link          */}
+          {/* ======================================================== */}
+          {isScience && group.sciencePairs!.map((pair) => {
+            const lectureAdded = plannedCodes.has(pair.lecture.code)
+            const labAdded = plannedCodes.has(pair.lab.code)
+            const pairAdded = lectureAdded && labAdded
+            return (
+              <button
+                key={pair.lecture.code}
+                onClick={() => onAddPair(pair.lecture, pair.lab)}
+                disabled={pairAdded}
+                className={`flex flex-col gap-2 rounded-lg border-2 px-4 py-3.5 text-left transition-all ${
+                  pairAdded
+                    ? "border-emerald-200 bg-emerald-50/50 opacity-80"
+                    : pair.lecture.priority === "recommended"
+                      ? "border-primary/20 bg-primary/[0.03] hover:border-primary/40 hover:bg-primary/[0.06]"
+                      : "border-border bg-muted/20 hover:border-muted-foreground/20 hover:bg-muted/40"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {pairAdded ? (
                     <CheckCircle className="h-4 w-4 shrink-0 text-emerald-500" />
                   ) : (
                     <Plus className="h-4 w-4 shrink-0 text-primary" />
                   )}
-                </button>
-              ))}
+                  <div className="flex flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="text-sm font-semibold text-foreground">{pair.lecture.code}</span>
+                    <span className="text-sm text-foreground">{pair.lecture.name}</span>
+                    <span className="text-[10px] text-muted-foreground">+</span>
+                    <span className="text-sm font-semibold text-foreground">{pair.lab.code}</span>
+                    <span className="text-sm text-foreground">{pair.lab.name}</span>
+                  </div>
+                  <Badge
+                    className={`shrink-0 text-[10px] font-bold ${
+                      pairAdded
+                        ? "border-emerald-200 bg-emerald-100 text-emerald-700"
+                        : "border-primary/20 bg-primary/10 text-primary"
+                    }`}
+                  >
+                    {pair.lecture.hrs + pair.lab.hrs} hrs
+                  </Badge>
+                </div>
+                {pair.lecture.note && (
+                  <p className="pl-6 text-[11px] leading-relaxed text-muted-foreground">
+                    {pair.lecture.note}
+                  </p>
+                )}
+                {pairAdded && (
+                  <p className="pl-6 text-[11px] font-medium text-emerald-600">
+                    Lecture + lab added to your schedule
+                  </p>
+                )}
+              </button>
+            )
+          })}
+
+          {/* ======================================================== */}
+          {/* CRITICAL courses - single select, prominent style         */}
+          {/* ======================================================== */}
+          {!isScience && critical.length > 0 && (
+            <div className="flex flex-col gap-2">
+              {critical.map(c => {
+                const added = plannedCodes.has(c.code)
+                return (
+                  <button
+                    key={c.code}
+                    onClick={() => onAdd(c)}
+                    disabled={added}
+                    className={`flex flex-col gap-1.5 rounded-lg border-2 px-4 py-3.5 text-left transition-all ${
+                      added
+                        ? "border-emerald-200 bg-emerald-50/50 opacity-80"
+                        : "border-primary/20 bg-primary/[0.04] hover:border-primary/40 hover:bg-primary/[0.08]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      {added ? (
+                        <CheckCircle className="h-4 w-4 shrink-0 text-emerald-500" />
+                      ) : (
+                        <Sparkles className="h-4 w-4 shrink-0 text-primary" />
+                      )}
+                      <span className="text-sm font-semibold text-foreground">{c.code}</span>
+                      <span className="text-sm text-foreground">{c.name}</span>
+                      <Badge className={`ml-auto shrink-0 text-[10px] font-bold ${
+                        added
+                          ? "border-emerald-200 bg-emerald-100 text-emerald-700"
+                          : "border-primary/20 bg-primary/10 text-primary"
+                      }`}>{c.hrs} hrs</Badge>
+                    </div>
+                    {c.note && (
+                      <p className="pl-6 text-[11px] leading-relaxed text-muted-foreground">{c.note}</p>
+                    )}
+                    {added && (
+                      <p className="pl-6 text-[11px] font-medium text-emerald-600">Added to your schedule</p>
+                    )}
+                  </button>
+                )
+              })}
             </div>
           )}
 
-          {/* Recommended courses - button-style options */}
-          {recommended.length > 0 && (
+          {/* ======================================================== */}
+          {/* RECOMMENDED courses - card buttons with rationale         */}
+          {/* ======================================================== */}
+          {!isScience && recommended.length > 0 && (
             <div className="flex flex-col gap-1.5">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Recommended
               </span>
-              <div className="flex flex-wrap gap-2">
-                {recommended.map(c => (
-                  <button
-                    key={c.code}
-                    onClick={() => onAdd(c)}
-                    disabled={plannedCodes.has(c.code) || c.code.includes("XXXX")}
-                    className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2.5 text-left transition-all hover:border-primary/30 hover:shadow-sm disabled:opacity-50 disabled:cursor-default"
-                  >
-                    {plannedCodes.has(c.code) ? (
-                      <CheckCircle className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                    ) : (
-                      <Plus className="h-3.5 w-3.5 shrink-0 text-primary" />
-                    )}
-                    <div className="flex flex-col">
-                      <div className="flex items-center gap-1.5">
+              <div className="flex flex-col gap-2">
+                {recommended.map(c => {
+                  const added = plannedCodes.has(c.code)
+                  return (
+                    <button
+                      key={c.code}
+                      onClick={() => onAdd(c)}
+                      disabled={added}
+                      className={`flex flex-col gap-1 rounded-lg border px-3.5 py-3 text-left transition-all ${
+                        added
+                          ? "border-emerald-200 bg-emerald-50/50 opacity-80"
+                          : "bg-card hover:border-primary/30 hover:shadow-sm"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        {added ? (
+                          <CheckCircle className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                        ) : (
+                          <Plus className="h-3.5 w-3.5 shrink-0 text-primary" />
+                        )}
                         <span className="text-xs font-semibold text-foreground">{c.code}</span>
-                        <span className="text-[10px] text-muted-foreground">{c.hrs}h</span>
+                        <span className="text-xs text-foreground">{c.name}</span>
+                        <span className="ml-auto text-[10px] font-medium text-muted-foreground">{c.hrs} hrs</span>
                       </div>
-                      <span className="text-[11px] text-foreground leading-tight">{c.name}</span>
-                      {c.note && <span className="text-[10px] text-muted-foreground leading-tight mt-0.5">{c.note}</span>}
-                    </div>
-                  </button>
-                ))}
+                      {c.note && (
+                        <p className="pl-[1.375rem] text-[10px] leading-relaxed text-muted-foreground">{c.note}</p>
+                      )}
+                    </button>
+                  )
+                })}
               </div>
             </div>
           )}
 
-          {/* Option courses - compact list */}
-          {options.length > 0 && (
+          {/* ======================================================== */}
+          {/* OPTION courses - compact chips                            */}
+          {/* ======================================================== */}
+          {!isScience && options.length > 0 && (
             <div className="flex flex-col gap-1.5">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Other Options
               </span>
-              <div className="flex flex-wrap gap-1.5">
-                {options.slice(0, 6).map(c => (
-                  <button
-                    key={c.code}
-                    onClick={() => onAdd(c)}
-                    disabled={plannedCodes.has(c.code)}
-                    className="flex items-center gap-1.5 rounded-md border bg-muted/30 px-2.5 py-1.5 text-left transition-colors hover:bg-muted/60 disabled:opacity-50 disabled:cursor-default"
-                  >
-                    {plannedCodes.has(c.code) ? (
-                      <CheckCircle className="h-3 w-3 shrink-0 text-emerald-500" />
-                    ) : (
-                      <Plus className="h-3 w-3 shrink-0 text-muted-foreground" />
-                    )}
-                    <span className="text-[11px] font-medium text-foreground">{c.code}</span>
-                    <span className="text-[10px] text-muted-foreground">{c.name}</span>
-                  </button>
-                ))}
+              <div className="flex flex-col gap-1.5">
+                {options.slice(0, 6).map(c => {
+                  const added = plannedCodes.has(c.code)
+                  return (
+                    <button
+                      key={c.code}
+                      onClick={() => onAdd(c)}
+                      disabled={added}
+                      className={`flex flex-col gap-0.5 rounded-md border px-3 py-2 text-left transition-colors ${
+                        added
+                          ? "border-emerald-200 bg-emerald-50/40 opacity-70"
+                          : "bg-muted/30 hover:bg-muted/60"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        {added ? (
+                          <CheckCircle className="h-3 w-3 shrink-0 text-emerald-500" />
+                        ) : (
+                          <Plus className="h-3 w-3 shrink-0 text-muted-foreground" />
+                        )}
+                        <span className="text-[11px] font-medium text-foreground">{c.code}</span>
+                        <span className="text-[10px] text-muted-foreground">{c.name}</span>
+                        <span className="ml-auto text-[10px] text-muted-foreground">{c.hrs}h</span>
+                      </div>
+                      {c.note && (
+                        <p className="pl-[1.125rem] text-[10px] leading-snug text-muted-foreground">{c.note}</p>
+                      )}
+                    </button>
+                  )
+                })}
               </div>
             </div>
           )}
 
-          {/* Ineligible courses */}
+          {/* ======================================================== */}
+          {/* INELIGIBLE courses                                        */}
+          {/* ======================================================== */}
           {ineligibleCourses.length > 0 && (
             <div className="flex flex-col gap-1.5">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -544,24 +665,29 @@ function RequirementGroupCard({
               {ineligibleCourses.slice(0, 3).map(c => (
                 <div
                   key={c.code}
-                  className="flex items-center gap-2.5 rounded-md border border-dashed bg-muted/20 px-3 py-2 opacity-70"
+                  className="flex flex-col gap-0.5 rounded-md border border-dashed bg-muted/20 px-3 py-2 opacity-70"
                 >
-                  <Lock className="h-3 w-3 shrink-0 text-muted-foreground" />
-                  <div className="flex flex-1 flex-col">
+                  <div className="flex items-center gap-2.5">
+                    <Lock className="h-3 w-3 shrink-0 text-muted-foreground" />
                     <span className="text-[11px] font-medium text-muted-foreground">{c.code} - {c.name}</span>
-                    {c.reason && (
-                      <span className="flex items-center gap-1 text-[10px] text-amber-600">
-                        <AlertTriangle className="h-2.5 w-2.5" />
-                        {c.reason}
-                      </span>
-                    )}
                   </div>
+                  {c.reason && (
+                    <span className="flex items-center gap-1 pl-[1.125rem] text-[10px] text-amber-600">
+                      <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
+                      {c.reason}
+                    </span>
+                  )}
+                  {c.note && (
+                    <p className="pl-[1.125rem] text-[10px] leading-snug text-muted-foreground">{c.note}</p>
+                  )}
                 </div>
               ))}
             </div>
           )}
 
-          {/* Group-specific search */}
+          {/* ======================================================== */}
+          {/* Group-specific search bar                                 */}
+          {/* ======================================================== */}
           {group.type === "choose" && (
             <div ref={groupSearchRef} className="relative mt-1">
               <div className="relative">

@@ -1049,7 +1049,14 @@ export interface RecommendedCourse {
   eligible: boolean            // prereqs met?
   reason?: string              // why not eligible
   priority: "critical" | "recommended" | "option"
-  note?: string
+  note?: string                // rationale explaining why this course matters
+  linkedLab?: string           // if this is a lecture, code of matching lab
+  linkedLecture?: string       // if this is a lab, code of matching lecture
+}
+
+export interface SciencePair {
+  lecture: RecommendedCourse
+  lab: RecommendedCourse
 }
 
 export interface RequirementGroup {
@@ -1060,6 +1067,7 @@ export interface RequirementGroup {
   type: "single" | "choose"    // single = one specific course, choose = pick from list
   courses: RecommendedCourse[]
   description?: string
+  sciencePairs?: SciencePair[]  // for auto-linking lecture/lab
 }
 
 /**
@@ -1106,7 +1114,7 @@ export function buildRecommendations(planned: Course[]): RequirementGroup[] {
         code: "SEVI 30103", name: "Strategic Management", hrs: 3,
         eligible: e.ok, reason: e.reason,
         priority: "critical",
-        note: "Capstone. Must complete all business core with C or better first. MKTG 34303 is in progress Fall 2026.",
+        note: "This is your Business Core capstone -- it integrates everything you've learned. It requires all business core courses completed with a C or better. MKTG 34303 is your last remaining prereq (in progress Fall 2026). Taking it this spring keeps you on the 8-semester plan.",
       }],
     })
   }
@@ -1115,9 +1123,9 @@ export function buildRecommendations(planned: Course[]): RequirementGroup[] {
   // 2. ECONOMICS MAJOR - Required courses not yet taken
   // ================================================================
   const econRequired: { code: string; name: string; hrs: number; note: string }[] = [
-    { code: "ECON 31303", name: "Intermediate Macroeconomics", hrs: 3, note: "8-semester plan: Spring Year 3. Pairs well with ECON 30303 (in progress)." },
-    { code: "ECON 43303", name: "Economics of Organizations", hrs: 3, note: "8-semester plan: Fall Year 4. Requires ECON 30303 (in progress Fall 2026)." },
-    { code: "ECON 47403", name: "Introduction to Econometrics", hrs: 4, note: "8-semester plan: Spring Year 3. 4+1 option: take ECON 57403 Fall to count for this." },
+    { code: "ECON 31303", name: "Intermediate Macroeconomics", hrs: 3, note: "Critical: The macro counterpart to ECON 30303. The 8-semester plan places this in Spring Year 3 alongside Econometrics. Taking it now builds the theory foundation for upper-level ECON electives in Years 3-4." },
+    { code: "ECON 43303", name: "Economics of Organizations", hrs: 3, note: "Requires ECON 30303 (in progress Fall 2026). The 8-semester plan places this in Fall Year 4. Taking it this spring is possible but adds workload alongside Econometrics (4 hrs). Consider deferring to balance semesters." },
+    { code: "ECON 47403", name: "Introduction to Econometrics", hrs: 4, note: "Core quantitative methods course (4 credit hours). Essential for economic analysis careers. The 8-semester plan places this in Spring Year 3. Note: 4+1 students can take ECON 57403 instead." },
   ]
   const econRequiredRemaining = econRequired.filter(c => !taken(c.code))
   if (econRequiredRemaining.length > 0) {
@@ -1181,14 +1189,14 @@ export function buildRecommendations(planned: Course[]): RequirementGroup[] {
   // 4. FINANCE MINOR (15 hours required, 0 completed)
   // ================================================================
   const finMinorCourses: { code: string; name: string; hrs: number; note?: string }[] = [
-    { code: "FINN 30103", name: "Financial Analysis", hrs: 3, note: "REQUIRED for Finance minor. Unlocks Investments, Corporate Finance, Financial Modeling, and Financial Data Analytics." },
-    { code: "FINN 30603", name: "Investments", hrs: 3, note: "Requires FINN 30103 as co-requisite. Key Finance minor course." },
-    { code: "FINN 31003", name: "Financial Modeling", hrs: 3, note: "Requires FINN 20403 only. Good early choice." },
-    { code: "FINN 36003", name: "Corporate Finance", hrs: 3, note: "Requires FINN 20403 + FINN 30103. Banking track." },
-    { code: "FINN 31303", name: "Commercial Banking", hrs: 3, note: "Requires FINN 20403 only. Banking track." },
-    { code: "FINN 37003", name: "International Finance", hrs: 3, note: "Also counts toward Intl Econ concentration." },
-    { code: "FINN 30003", name: "Personal Financial Management", hrs: 3, note: "No prerequisites. Insurance/RE track." },
-    { code: "FINN 36203", name: "Risk Management", hrs: 3, note: "Insurance/RE track." },
+    { code: "FINN 30103", name: "Financial Analysis", hrs: 3, note: "Gateway course for the Finance minor. You MUST take this first -- it unlocks Investments, Corporate Finance, Financial Modeling, and Financial Data Analytics. You have FINN 20403 completed (B), so you are eligible right now. Without this, your minor cannot progress." },
+    { code: "FINN 30603", name: "Investments", hrs: 3, note: "Can be co-enrolled with FINN 30103. Covers portfolio theory, valuation, and securities analysis. A core Finance minor course that also counts toward Jr/Sr business elective hours." },
+    { code: "FINN 31003", name: "Financial Modeling", hrs: 3, note: "Only requires FINN 20403 (completed). Teaches Excel-based financial modeling -- highly practical for finance careers. Can take without FINN 30103." },
+    { code: "FINN 36003", name: "Corporate Finance", hrs: 3, note: "Requires both FINN 20403 and FINN 30103. Part of the Banking concentration track. Take after completing FINN 30103." },
+    { code: "FINN 31303", name: "Commercial Banking", hrs: 3, note: "Only requires FINN 20403 (completed). Banking track option. Can take now without FINN 30103." },
+    { code: "FINN 37003", name: "International Finance", hrs: 3, note: "No specific prerequisites. Also counts toward the International Economics concentration if you pursue that path." },
+    { code: "FINN 30003", name: "Personal Financial Management", hrs: 3, note: "No prerequisites. Insurance/Real Estate track. Lighter option if you need to balance a heavy ECON semester." },
+    { code: "FINN 36203", name: "Risk Management", hrs: 3, note: "Insurance/Real Estate track. Good complement to Personal Financial Management." },
   ]
   const finMinorRemaining = finMinorCourses.filter(c => !taken(c.code))
   if (finMinorRemaining.length > 0) {
@@ -1246,44 +1254,75 @@ export function buildRecommendations(planned: Course[]): RequirementGroup[] {
   }
 
   // ================================================================
-  // 6. STATE MINIMUM CORE - Remaining (Humanities, Natural Science)
+  // 6. STATE MINIMUM CORE - Remaining (Natural Science lecture+lab)
   // ================================================================
   {
-    const stateMinOptions: { code: string; name: string; hrs: number; note?: string }[] = [
-      { code: "PHIL 21003", name: "Intro to Ethics", hrs: 3, note: "In progress Fall 2026. Fulfills Humanities." },
-      { code: "HIST 20003", name: "US History to 1877", hrs: 3, note: "In progress Fall 2026. Fulfills US History/Gov." },
+    // Jordan already has GEOL 11103 + GEOL 11101. Needs a 2nd science pair.
+    // Science pairs: lecture + matching lab auto-link together.
+    const sciencePairs: { lecture: RecommendedCourse; lab: RecommendedCourse }[] = [
+      {
+        lecture: {
+          code: "BIOL 11003", name: "Biology for Majors", hrs: 3,
+          eligible: true, priority: "recommended",
+          note: "Broad science foundation. Pairs with any biology lab. Good fit for business students who want a general science option.",
+          linkedLab: "BIOL 11001",
+        },
+        lab: {
+          code: "BIOL 11001", name: "Biology for Majors Lab", hrs: 1,
+          eligible: true, priority: "recommended",
+          note: "Matching lab for BIOL 11003. Selected automatically when the lecture is chosen.",
+          linkedLecture: "BIOL 11003",
+        },
+      },
+      {
+        lecture: {
+          code: "CHEM 10003", name: "Fundamentals of Chemistry", hrs: 3,
+          eligible: true, priority: "recommended",
+          note: "Accessible chemistry option. No prerequisite. Useful if you want exposure to quantitative science beyond geology.",
+          linkedLab: "CHEM 10001",
+        },
+        lab: {
+          code: "CHEM 10001", name: "Fundamentals of Chemistry Lab", hrs: 1,
+          eligible: true, priority: "recommended",
+          note: "Matching lab for CHEM 10003. Selected automatically when the lecture is chosen.",
+          linkedLecture: "CHEM 10003",
+        },
+      },
+      {
+        lecture: {
+          code: "PHYS 10003", name: "Intro to Physics", hrs: 3,
+          eligible: true, priority: "option",
+          note: "More quantitative. Good complement to economics/finance background. Requires comfort with math concepts.",
+          linkedLab: "PHYS 10001",
+        },
+        lab: {
+          code: "PHYS 10001", name: "Intro to Physics Lab", hrs: 1,
+          eligible: true, priority: "option",
+          note: "Matching lab for PHYS 10003. Selected automatically when the lecture is chosen.",
+          linkedLecture: "PHYS 10003",
+        },
+      },
     ]
-    const remaining = stateMinOptions.filter(c => !taken(c.code))
-    // Natural science is the big remaining gap
-    const needsNatSci = true // Jordan still needs 2nd science lecture + lab
-    if (needsNatSci || remaining.length > 0) {
-      const courses: RecommendedCourse[] = []
-      if (needsNatSci) {
-        courses.push({
-          code: "SCI XXXX3", name: "Natural Science Lecture", hrs: 3,
-          eligible: true, priority: "recommended",
-          note: "Need 2nd science lecture. Options: BIOL, CHEM, PHYS, or GEOL (already took GEOL 11103).",
-        })
-        courses.push({
-          code: "SCI XXXX1", name: "Matching Science Lab", hrs: 1,
-          eligible: true, priority: "recommended",
-          note: "Must match the lecture. Total: 4 credit hours for lecture + lab.",
-        })
+
+    // Flatten out pairs, only include those not already taken/planned
+    const courses: RecommendedCourse[] = []
+    for (const pair of sciencePairs) {
+      if (!taken(pair.lecture.code) && !taken(pair.lab.code)) {
+        courses.push(pair.lecture)
+        courses.push(pair.lab)
       }
-      remaining.forEach(c => {
-        courses.push({
-          code: c.code, name: c.name, hrs: c.hrs,
-          eligible: true, priority: "option", note: c.note,
-        })
-      })
+    }
+
+    if (courses.length > 0) {
       groups.push({
         id: "state-min-core",
         label: "State Minimum Core",
         hoursNeeded: 4,
         hoursCompleted: 16,
         type: "choose",
-        description: "16 of 20 hours completed. Need Natural Science lecture + matching lab (4 hrs). PHIL 21003 and HIST 20003 are in progress Fall 2026.",
+        description: "16 of 20 hours completed (GEOL 11103/11101, PSYC 20003, ARHS 10003, PHIL 21003 IP, HIST 20003 IP). You still need a Natural Science lecture + matching lab (4 hrs total). Selecting a lecture automatically adds the matching lab.",
         courses,
+        sciencePairs, // attach for UI auto-linking
       })
     }
   }
