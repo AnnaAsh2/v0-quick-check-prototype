@@ -69,26 +69,7 @@ export function ScreenReview({ planned }: { planned: Course[] }) {
   const toggle = (code: string) =>
     setExpanded((prev) => (prev === code ? null : code))
 
-  // Seed advisor notes on first render
-  const defaultNotes = useMemo(() => {
-    const lines: string[] = []
-    if (result.failCount > 0) {
-      result.courses.filter(c => c.status === "fail").forEach(c => {
-        if (c.code === "FINN 30603") {
-          lines.push("FINN 30603 needs to be swapped for FINN 30103 -- Jordan needs it for the minor and hasn't started those 15 hours yet.")
-        } else {
-          lines.push(`${c.code} has unmet prerequisites and cannot be registered. Needs attention.`)
-        }
-      })
-    }
-    if (result.courses.find(c => c.code === "FINN 30103" && c.status === "pass")) {
-      lines.push("Good that Jordan is taking FINN 30103 -- this starts the Finance minor and unlocks upper-level FINN courses for Fall 2027.")
-    }
-    if (lines.length === 0) {
-      lines.push("Plan looks reasonable overall. No major concerns.")
-    }
-    return lines.join(" ")
-  }, [result])
+
 
   /* ---------------------------------------------------------------- */
   /*  Email Generators                                                 */
@@ -567,11 +548,11 @@ export function ScreenReview({ planned }: { planned: Course[] }) {
           </p>
         </div>
         <Textarea
-          defaultValue={defaultNotes}
+          value={advisorNotes}
           onChange={(e) => setAdvisorNotes(e.target.value)}
           rows={5}
           className="text-sm leading-relaxed shadow-sm"
-          placeholder="Add any notes for your records or to include in the student email..."
+          placeholder="Feedback on plan..."
         />
       </div>
 
