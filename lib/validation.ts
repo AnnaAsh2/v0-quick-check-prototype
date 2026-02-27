@@ -2136,11 +2136,19 @@ function generateAdvisorIntelligence(
     })
   }
 
-  // Check overload
+  // Check overload (>17)
   if (totalHrs > 17 && biggestFlags.length < 2) {
     biggestFlags.push({
       question: `Is ${totalHrs} credit hours manageable given Jordan's ${STUDENT.gpa} GPA?`,
       context: `The plan exceeds the standard 17-hour limit. Jordan's GPA meets the 2.75 threshold for overload approval, but consider work schedule, extracurriculars, and how the ${conditionalCount > 0 ? "conditional courses" : "course mix"} might affect workload.`,
+    })
+  }
+
+  // Check light load (<15)
+  if (totalHrs < 15 && totalHrs > 0 && biggestFlags.length < 2) {
+    biggestFlags.push({
+      question: `Is there a reason Jordan is only planning ${totalHrs} credit hours?`,
+      context: `Most full-time students take 15-17 hours per semester. At ${totalHrs} hours, Jordan may fall behind on degree progress toward the Spring 2028 graduation target. Check whether this is intentional (work schedule, personal reasons) or if Jordan should add another course.`,
     })
   }
 
@@ -2204,6 +2212,13 @@ function generateAdvisorIntelligence(
     questionsForStudent.push({
       question: `Your plan is at ${totalHrs} credit hours, which is above the standard 17-hour limit. Do you have a work schedule or other commitments I should know about? I want to make sure this load is sustainable.`,
       reason: "Overload requires GPA 2.75+ and advisor approval",
+    })
+  }
+
+  if (totalHrs < 15 && totalHrs > 0) {
+    questionsForStudent.push({
+      question: `I noticed your plan is at ${totalHrs} credit hours, which is lighter than typical. Is that intentional? If there's flexibility, adding another course could help keep you on track for your Spring 2028 graduation timeline.`,
+      reason: `${totalHrs} hours is below the 15-hour standard for full-time; may delay graduation`,
     })
   }
 

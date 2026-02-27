@@ -95,25 +95,56 @@ export function ScreenReview({ planned }: { planned: Course[] }) {
   /* ---------------------------------------------------------------- */
 
   const approveEmailBody = useMemo(() => {
+    const notes = advisorNotes.trim()
     const lines = [
       `Hi Jordan,`,
       ``,
-      `I've reviewed your Spring 2027 course plan and it looks good to go. Here's a quick summary:`,
+      `I've reviewed your Spring 2027 course plan and you're good to go. Here's a quick summary of what I see:`,
       ``,
       `Courses: ${planned.map(c => `${c.code} (${c.name})`).join(", ")}`,
       `Total Hours: ${result.totalHrs}`,
       ``,
     ]
-    if (advisorNotes.trim()) {
-      lines.push(`A few notes from my review:`, ``, advisorNotes.trim(), ``)
+
+    // Incorporate advisor notes as student-facing guidance (not verbatim)
+    // Parse notes for common themes and rewrite in a student-friendly tone
+    if (notes) {
+      const hasSwapNote = notes.toLowerCase().includes("swap") || notes.toLowerCase().includes("replace")
+      const hasMinorNote = notes.toLowerCase().includes("minor") || notes.toLowerCase().includes("finn")
+      const hasPositiveNote = notes.toLowerCase().includes("good") || notes.toLowerCase().includes("solid") || notes.toLowerCase().includes("reasonable")
+      const hasPrereqNote = notes.toLowerCase().includes("prereq") || notes.toLowerCase().includes("cannot") || notes.toLowerCase().includes("unmet")
+
+      if (hasSwapNote || hasPrereqNote) {
+        lines.push(`A heads-up: there may be a course adjustment needed before you register. Double-check that all prerequisites are met for each course on your list, and reach out if you need help finding an alternative.`)
+        lines.push(``)
+      }
+      if (hasMinorNote) {
+        lines.push(`Regarding your Finance minor -- you're heading in the right direction. Make sure you have a clear plan for which Finance courses you'll take in Fall 2027 and Spring 2028 so you can finish on time.`)
+        lines.push(``)
+      }
+      if (hasPositiveNote && !hasSwapNote && !hasPrereqNote) {
+        lines.push(`Overall, this is a solid plan. You're making good progress and your course selections line up well with your degree requirements.`)
+        lines.push(``)
+      }
+      // If notes don't match any pattern, synthesize a general version
+      if (!hasSwapNote && !hasMinorNote && !hasPositiveNote && !hasPrereqNote) {
+        lines.push(`A couple of things to keep in mind as you finalize registration:`)
+        // Split notes into sentences and rephrase as bullet points
+        const sentences = notes.split(/[.!]\s*/).filter(s => s.trim().length > 5)
+        sentences.slice(0, 3).forEach(s => {
+          lines.push(`  - ${s.trim().charAt(0).toUpperCase() + s.trim().slice(1)}${s.trim().endsWith('.') ? '' : '.'}`)
+        })
+        lines.push(``)
+      }
     }
-    if (result.suggestion?.severity === "yellow") {
+
+    if (result.suggestion?.severity === "yellow" && !notes) {
       lines.push(`One thing to keep in mind: ${result.suggestion.body[0]}`, ``)
     }
     lines.push(
       `Your updated degree worksheet is attached below showing your completed, in-progress, and newly planned courses.`,
       ``,
-      `You're on track for Spring 2028 graduation. Let me know if you have any questions.`,
+      `You're on track for Spring 2028 graduation. Let me know if you have any questions -- happy to help.`,
       ``,
       `Best,`,
       `Academic Advisor`,
