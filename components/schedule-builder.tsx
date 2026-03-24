@@ -302,12 +302,22 @@ export function ScheduleBuilder({ planned, onRemove }: Props) {
     setShowBlockLabelInput(false)
   }
 
-  // Select a section
+  // Select or deselect a section
   const selectSection = (section: Section) => {
-    setSelectedSections(prev => ({
-      ...prev,
-      [section.courseCode]: section
-    }))
+    setSelectedSections(prev => {
+      const current = prev[section.courseCode]
+      // If clicking the same section that's already selected, deselect it
+      if (current?.id === section.id) {
+        const newSelections = { ...prev }
+        delete newSelections[section.courseCode]
+        return newSelections
+      }
+      // Otherwise select the new section
+      return {
+        ...prev,
+        [section.courseCode]: section
+      }
+    })
   }
 
   // Check if section has conflicts with constraints or other selected sections
@@ -340,27 +350,114 @@ export function ScheduleBuilder({ planned, onRemove }: Props) {
     return { status: "ok" as const, reason: "" }
   }
 
-  // Optimize schedule - uses OPTIMAL_SECTIONS from course-data.ts
+  // Optimize schedule - dynamically finds best sections for selected courses
   const optimizeSchedule = () => {
     setOptimizing(true)
     setTimeout(() => {
-      // Build optimal schedule from OPTIMAL_SECTIONS, but only for selected courses
       const newSelections: Record<string, Section> = {}
-      OPTIMAL_SECTIONS.forEach(opt => {
-        // Only add if this course is in the planned courses
-        if (plannedCodes.has(opt.course)) {
-          const section = allSections.find(s => 
-            s.courseCode === opt.course && s.section === `-${opt.section}`
-          )
-          if (section) {
-            newSelections[opt.course] = section
+      const scheduledSections: Section[] = []
+      
+      // Get sections for each planned course, sorted by preference score
+      const courseOrder = Array.from(plannedCodes)
+      
+      for (const courseCode of courseOrder) {
+        const sections = sectionsByCourse[courseCode] || []
+        if (sections.length === 0) continue
+        
+        // Score each section based on preferences and conflicts
+        const scoredSections = sections.map(section => {
+          let score = 100
+          
+          // Check for conflicts with time blocks
+          for (const block of timeBlocks) {
+            const sectionStart = parseTime(section.startTime)
+            const sectionEnd = parseTime(section.endTime)
+            for (const blockDay of block.days) {
+              const sectionDays = getDaysFromString(section.days)
+              if (sectionDays.includes(blockDay)) {
+                const blockStart = parseTime(block.startTime)
+                const blockEnd = parseTime(block.endTime)
+                if (timeOverlaps(sectionStart, sectionEnd, blockStart, blockEnd)) {
+                  score -= 1000 // Major penalty for blocked time conflict
+                }
+              }
+            }
           }
+          
+          // Check for conflicts with already scheduled sections
+          for (const scheduled of scheduledSections) {
+            const sectionStart = parseTime(section.startTime)
+            const sectionEnd = parseTime(section.endTime)
+            const scheduledStart = parseTime(scheduled.startTime)
+            const scheduledEnd = parseTime(scheduled.endTime)
+            
+            const sectionDays = getDaysFromString(section.days)
+            const scheduledDays = getDaysFromString(scheduled.days)
+            
+            const overlappingDays = sectionDays.filter(d => scheduledDays.includes(d))
+            if (overlappingDays.length > 0 && timeOverlaps(sectionStart, sectionEnd, scheduledStart, scheduledEnd)) {
+              score -= 500 // Penalty for course conflict
+            }
+          }
+          
+          // Prefer morning if enabled
+          const morningPref = preferences.find(p => p.id === "morning")?.enabled
+          if (morningPref) {
+            const startTime = parseTime(section.startTime)
+            if (startTime >= 480 && startTime < 720) { // 8 AM - 12 PM
+              score += 20
+            }
+          }
+          
+          // Prefer afternoon if enabled
+          const afternoonPref = preferences.find(p => p.id === "afternoon")?.enabled
+          if (afternoonPref) {
+            const startTime = parseTime(section.startTime)
+            if (startTime >= 720 && startTime < 1080) { // 12 PM - 6 PM
+              score += 20
+            }
+          }
+          
+          // Prefer larger capacity sections
+          if (section.cap >= 50) score += 10
+          else if (section.cap < 30) score -= 10
+          
+          // Check if this is an OPTIMAL_SECTIONS pick (bonus)
+          const isOptimal = OPTIMAL_SECTIONS.some(
+            opt => opt.course === section.courseCode && `-${opt.section}` === section.section
+          )
+          if (isOptimal) score += 15
+          
+          return { section, score }
+        })
+        
+        // Sort by score and pick the best
+        scoredSections.sort((a, b) => b.score - a.score)
+        const bestSection = scoredSections[0]
+        
+        if (bestSection && bestSection.score > -500) { // Only add if not blocked
+          newSelections[courseCode] = bestSection.section
+          scheduledSections.push(bestSection.section)
         }
-      })
+      }
+      
       setSelectedSections(newSelections)
       setOptimizing(false)
       setShowExplanation(true)
     }, 1500)
+  }
+  
+  // Helper to get days array from string
+  const getDaysFromString = (daysStr: string): string[] => {
+    if (daysStr === "MWF") return ["Mon", "Wed", "Fri"]
+    if (daysStr === "MW") return ["Mon", "Wed"]
+    if (daysStr === "T/Th") return ["Tue", "Thu"]
+    if (daysStr === "Mon") return ["Mon"]
+    if (daysStr === "Tue") return ["Tue"]
+    if (daysStr === "Wed") return ["Wed"]
+    if (daysStr === "Thu") return ["Thu"]
+    if (daysStr === "Fri") return ["Fri"]
+    return []
   }
 
   // Calculate total hours and conflicts
