@@ -246,7 +246,7 @@ export function ScheduleBuilder({ planned, onRemove, onRemoveCourse, selectedSec
 
   // Check conflicts
   const getConflicts = useMemo(() => {
-    const conflicts: { sectionId: string, reason: string, type: "constraint" | "section" }[] = []
+    const conflicts: { sectionId: string, reason: string, type: "constraint" | "section", conflictsWith?: string }[] = []
     
     Object.values(selectedSections).forEach(section => {
       // Check constraint conflicts
@@ -254,8 +254,9 @@ export function ScheduleBuilder({ planned, onRemove, onRemoveCourse, selectedSec
         if (sectionConflictsWithBlock(section, block)) {
           conflicts.push({
             sectionId: section.id,
-            reason: `Overlaps ${block.label} (${block.days.join("/")} ${block.startTime}–${block.endTime})`,
-            type: "constraint"
+            reason: `Conflicts with "${block.label}" (${block.days.join("/")} ${block.startTime}–${block.endTime})`,
+            type: "constraint",
+            conflictsWith: block.label
           })
         }
       })
@@ -265,8 +266,9 @@ export function ScheduleBuilder({ planned, onRemove, onRemoveCourse, selectedSec
         if (section.id !== other.id && sectionsConflict(section, other)) {
           conflicts.push({
             sectionId: section.id,
-            reason: `Overlaps ${other.courseCode}${other.section}`,
-            type: "section"
+            reason: `"${section.courseName}" conflicts with "${other.courseName}"`,
+            type: "section",
+            conflictsWith: other.courseName
           })
         }
       })
@@ -914,8 +916,12 @@ export function ScheduleBuilder({ planned, onRemove, onRemoveCourse, selectedSec
                         const bottom = Math.min(48, (sectionEnd - hourStart) / 60 * 48)
                         const height = bottom - top
                         
-                        // Check if this section has any conflicts
-                        const hasConflict = getConflicts.some(c => c.sectionId === section.id)
+                        // Check if this section has any conflicts and get conflict details
+                        const sectionConflicts = getConflicts.filter(c => c.sectionId === section.id)
+                        const hasConflict = sectionConflicts.length > 0
+                        const conflictTooltip = hasConflict 
+                          ? sectionConflicts.map(c => c.reason).join("\n")
+                          : undefined
                         const colorClass = hasConflict 
                           ? "bg-red-100 border-red-400 ring-2 ring-red-400/50" 
                           : getCourseColor(section.courseCode)
@@ -923,17 +929,30 @@ export function ScheduleBuilder({ planned, onRemove, onRemoveCourse, selectedSec
                         return (
                           <div
                             key={section.id}
-                            className={`absolute inset-x-0.5 rounded border ${colorClass} overflow-hidden ${hasConflict ? "z-20" : ""}`}
+                            className={`absolute inset-x-0.5 rounded border ${colorClass} overflow-hidden ${hasConflict ? "z-20 cursor-help" : ""} group/block`}
                             style={{
                               top: `${top}px`,
                               height: `${height}px`,
                             }}
+                            title={conflictTooltip}
                           >
+                            {/* Hover tooltip for conflicts */}
+                            {hasConflict && (
+                              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1 hidden group-hover/block:block z-50 pointer-events-none">
+                                <div className="bg-red-700 text-white text-[9px] px-2 py-1.5 rounded shadow-lg whitespace-nowrap max-w-[200px]">
+                                  <div className="font-semibold mb-0.5">Schedule Conflict</div>
+                                  {sectionConflicts.map((c, i) => (
+                                    <div key={i} className="opacity-90">{c.reason}</div>
+                                  ))}
+                                </div>
+                                <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-red-700" />
+                              </div>
+                            )}
                             {sectionStart >= hourStart && sectionStart < hourEnd && (
                               <div className={`p-0.5 text-[8px] leading-tight ${hasConflict ? "text-red-800" : ""}`}>
                                 <div className="font-bold truncate flex items-center gap-0.5">
                                   {hasConflict && <AlertTriangle className="h-2.5 w-2.5 text-red-600 flex-shrink-0" />}
-                                  {section.courseCode}
+                                  {section.courseName}
                                 </div>
                                 <div className="truncate opacity-75">{section.section} · {section.instructor}</div>
                                 {hasConflict && (
