@@ -216,23 +216,9 @@ export function ScheduleBuilder({ planned, onRemove }: Props) {
   const [optimizing, setOptimizing] = useState(false)
   const [showExplanation, setShowExplanation] = useState(false)
 
-  // Get planned course codes (including science options)
+  // Get planned course codes - only show courses selected in other tabs
   const plannedCodes = useMemo(() => {
-    const codes = new Set(planned.map(c => c.code))
-    // Add science options if any science course is selected
-    const hasScience = planned.some(c => 
-      c.code.startsWith("ASTR") || c.code.startsWith("ENSC") || c.code.startsWith("PHYS")
-    )
-    if (hasScience || planned.length > 0) {
-      // Show science options by default for Jordan's profile
-      codes.add("ASTR 10003")
-      codes.add("ASTR 10001")
-      codes.add("ENSC 10003")
-      codes.add("ENSC 10001")
-      codes.add("PHYS 10103")
-      codes.add("PHYS 10101")
-    }
-    return codes
+    return new Set(planned.map(c => c.code))
   }, [planned])
 
   // Filter sections to only show for planned courses
@@ -544,6 +530,19 @@ export function ScheduleBuilder({ planned, onRemove }: Props) {
             </>
           )}
         </Button>
+
+        {/* Empty State */}
+        {planned.length === 0 && (
+          <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
+            <Calendar className="h-10 w-10 text-muted-foreground/40" />
+            <div className="flex flex-col gap-1">
+              <p className="text-sm font-medium text-muted-foreground">No courses selected</p>
+              <p className="text-xs text-muted-foreground/70 max-w-[200px]">
+                Use the &quot;I Know What I Want&quot; or &quot;What Should I Take?&quot; tabs to add courses first
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Course Sections */}
         {Object.entries(sectionsByCourse).map(([courseCode, sections]) => {
