@@ -443,7 +443,7 @@ function RequirementGroupCard({
   onRemove: (code: string) => void
 }) {
   const [expanded, setExpanded] = useState(
-    group.id === "business-core" || group.id === "econ-major-required" || group.id === "finance-minor"
+    group.id === "business-core" || group.id === "econ-major-required" || group.id === "finance-minor" || group.id === "state-min-core"
   )
 
   const plannedInGroup = group.courses.filter(c => plannedCodes.has(c.code)).length
