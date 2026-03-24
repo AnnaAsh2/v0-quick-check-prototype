@@ -4,6 +4,7 @@ import { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   X, Plus, Sparkles, AlertTriangle, Star, Clock, Calendar,
   Sun, Moon, CheckCircle, Loader2
@@ -926,30 +927,16 @@ export function ScheduleBuilder({ planned, onRemove, onRemoveCourse, selectedSec
                           ? "bg-red-100 border-red-400 ring-2 ring-red-400/50" 
                           : getCourseColor(section.courseCode)
                         
-                        return (
+                        const blockContent = (
                           <div
-                            key={section.id}
-                            className={`absolute inset-x-0.5 rounded border ${colorClass} overflow-hidden ${hasConflict ? "z-20 cursor-help" : ""} group/block`}
+                            className={`absolute inset-x-0.5 rounded border ${colorClass} ${hasConflict ? "z-20 cursor-help" : ""} overflow-hidden`}
                             style={{
                               top: `${top}px`,
                               height: `${height}px`,
                             }}
-                            title={conflictTooltip}
                           >
-                            {/* Hover tooltip for conflicts */}
-                            {hasConflict && (
-                              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1 hidden group-hover/block:block z-50 pointer-events-none">
-                                <div className="bg-red-700 text-white text-[9px] px-2 py-1.5 rounded shadow-lg whitespace-nowrap max-w-[200px]">
-                                  <div className="font-semibold mb-0.5">Schedule Conflict</div>
-                                  {sectionConflicts.map((c, i) => (
-                                    <div key={i} className="opacity-90">{c.reason}</div>
-                                  ))}
-                                </div>
-                                <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-red-700" />
-                              </div>
-                            )}
                             {sectionStart >= hourStart && sectionStart < hourEnd && (
-                              <div className={`p-0.5 text-[8px] leading-tight ${hasConflict ? "text-red-800" : ""}`}>
+                              <div className={`p-0.5 text-[8px] leading-tight ${hasConflict ? "text-red-800" : ""} h-full`}>
                                 <div className="font-bold truncate flex items-center gap-0.5">
                                   {hasConflict && <AlertTriangle className="h-2.5 w-2.5 text-red-600 flex-shrink-0" />}
                                   {section.courseName}
@@ -965,6 +952,32 @@ export function ScheduleBuilder({ planned, onRemove, onRemoveCourse, selectedSec
                             )}
                           </div>
                         )
+                        
+                        // Wrap conflicting blocks in tooltip
+                        if (hasConflict) {
+                          return (
+                            <Tooltip key={section.id}>
+                              <TooltipTrigger asChild>
+                                {blockContent}
+                              </TooltipTrigger>
+                              <TooltipContent 
+                                side="right" 
+                                className="bg-red-700 text-white border-red-800 max-w-[250px]"
+                                sideOffset={5}
+                              >
+                                <div className="font-bold mb-1 flex items-center gap-1.5">
+                                  <AlertTriangle className="h-3.5 w-3.5" />
+                                  Schedule Conflict
+                                </div>
+                                {sectionConflicts.map((c, i) => (
+                                  <div key={i} className="text-red-100">{c.reason}</div>
+                                ))}
+                              </TooltipContent>
+                            </Tooltip>
+                          )
+                        }
+                        
+                        return <div key={section.id}>{blockContent}</div>
                       })}
                     </div>
                     )
