@@ -318,6 +318,44 @@ export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
               </div>
             )}
           </div>
+
+          {/* Selected courses list */}
+          {planned.length > 0 && (
+            <div className="rounded-xl border bg-card p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Selected Courses
+                </p>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="text-xs font-semibold">{planned.length} courses</Badge>
+                  <Badge className="border-primary/20 bg-primary/10 text-xs font-semibold text-primary">{totalHrs} credit hours</Badge>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                {planned.map((c) => (
+                  <div
+                    key={c.code}
+                    className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="shrink-0 font-mono text-[10px]">{c.code}</Badge>
+                      <span className="text-xs font-medium text-foreground">{c.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground">{c.hrs} hrs</span>
+                      <button
+                        onClick={() => removeCourse(c.code)}
+                        className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500"
+                        aria-label={`Remove ${c.code}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -342,6 +380,44 @@ export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
               onRemove={removeCourse}
             />
           ))}
+
+          {/* Selected courses list */}
+          {planned.length > 0 && (
+            <div className="rounded-xl border bg-card p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Selected Courses
+                </p>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="text-xs font-semibold">{planned.length} courses</Badge>
+                  <Badge className="border-primary/20 bg-primary/10 text-xs font-semibold text-primary">{totalHrs} credit hours</Badge>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                {planned.map((c) => (
+                  <div
+                    key={c.code}
+                    className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="shrink-0 font-mono text-[10px]">{c.code}</Badge>
+                      <span className="text-xs font-medium text-foreground">{c.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground">{c.hrs} hrs</span>
+                      <button
+                        onClick={() => removeCourse(c.code)}
+                        className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500"
+                        aria-label={`Remove ${c.code}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
