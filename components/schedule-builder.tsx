@@ -344,22 +344,36 @@ export function ScheduleBuilder({ planned, onRemove, onRemoveCourse, selectedSec
     setShowBlockLabelInput(false)
   }
 
+  // Track recently removed courses for visual feedback
+  const [recentlyRemoved, setRecentlyRemoved] = useState<string | null>(null)
+
   // Select or deselect a section
   const selectSection = (section: Section) => {
-    setSelectedSections(prev => {
-      const current = prev[section.courseCode]
-      // If clicking the same section that's already selected, deselect it
-      if (current?.id === section.id) {
+    const current = selectedSections[section.courseCode]
+    
+    // If clicking the same section that's already selected, deselect it AND remove from planned
+    if (current?.id === section.id) {
+      // Show feedback
+      setRecentlyRemoved(section.courseName)
+      setTimeout(() => setRecentlyRemoved(null), 3000)
+      
+      // Remove from selected sections
+      setSelectedSections(prev => {
         const newSelections = { ...prev }
         delete newSelections[section.courseCode]
         return newSelections
-      }
-      // Otherwise select the new section
-      return {
-        ...prev,
-        [section.courseCode]: section
-      }
-    })
+      })
+      
+      // Also remove from planned courses list (syncs with Quick Check)
+      onRemoveCourse(section.courseCode)
+      return
+    }
+    
+    // Otherwise select the new section
+    setSelectedSections(prev => ({
+      ...prev,
+      [section.courseCode]: section
+    }))
   }
 
   // Check if section has conflicts with constraints or other selected sections
@@ -777,6 +791,16 @@ export function ScheduleBuilder({ planned, onRemove, onRemoveCourse, selectedSec
 
       {/* RIGHT COLUMN: Calendar Grid */}
       <div className="w-[45%] flex flex-col gap-3 overflow-hidden">
+        {/* Removal notification */}
+        {recentlyRemoved && (
+          <div className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 animate-in fade-in slide-in-from-top-2 duration-300">
+            <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0" />
+            <span>
+              <strong>{recentlyRemoved}</strong> removed from schedule and Quick Check evaluation
+            </span>
+          </div>
+        )}
+        
         {/* Calendar */}
         <div className="flex-1 rounded-lg border bg-card overflow-auto">
           <div className="min-w-[400px]">
