@@ -9,6 +9,7 @@ import {
   Sun, Moon, CheckCircle, Loader2
 } from "lucide-react"
 import type { Course } from "@/lib/validation"
+import { SECTIONS, COURSES, OPTIMAL_SECTIONS } from "@/lib/course-data"
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                               */
@@ -44,71 +45,39 @@ interface Preference {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Section Data                                                        */
+/*  Section Data - Transform from course-data.ts                        */
 /* ------------------------------------------------------------------ */
 
-const allSections: Section[] = [
-  // SEVI 30103 Strategic Management — 20 sections
-  { id: "sevi-001", courseCode: "SEVI 30103", courseName: "Strategic Management", section: "-001", days: "MWF", startTime: "9:40 AM", endTime: "10:30 AM", instructor: "Baldwin", cap: 48, room: "JBHT 148", hrs: 3 },
-  { id: "sevi-002", courseCode: "SEVI 30103", courseName: "Strategic Management", section: "-002", days: "MWF", startTime: "10:45 AM", endTime: "11:35 AM", instructor: "Panda", cap: 48, room: "JBHT 148", hrs: 3 },
-  { id: "sevi-003", courseCode: "SEVI 30103", courseName: "Strategic Management", section: "-003", days: "MW", startTime: "4:35 PM", endTime: "5:50 PM", instructor: "McCullough", cap: 44, room: "WJWH 103", hrs: 3 },
-  { id: "sevi-004", courseCode: "SEVI 30103", courseName: "Strategic Management", section: "-004", days: "MWF", startTime: "12:55 PM", endTime: "1:45 PM", instructor: "Davis", cap: 50, room: "JBHT 147", hrs: 3 },
-  { id: "sevi-005", courseCode: "SEVI 30103", courseName: "Strategic Management", section: "-005", days: "MWF", startTime: "2:00 PM", endTime: "2:50 PM", instructor: "Davis", cap: 48, room: "JBHT 147", hrs: 3 },
-  { id: "sevi-006", courseCode: "SEVI 30103", courseName: "Strategic Management", section: "-006", days: "MWF", startTime: "3:05 PM", endTime: "3:55 PM", instructor: "Davis", cap: 50, room: "JBHT 147", hrs: 3 },
-  { id: "sevi-007", courseCode: "SEVI 30103", courseName: "Strategic Management", section: "-007", days: "T/Th", startTime: "8:00 AM", endTime: "9:15 AM", instructor: "Welsh", cap: 49, room: "JBHT 148", hrs: 3 },
-  { id: "sevi-008", courseCode: "SEVI 30103", courseName: "Strategic Management", section: "-008", days: "T/Th", startTime: "9:30 AM", endTime: "10:45 AM", instructor: "Smith", cap: 46, room: "JBHT 149", hrs: 3 },
-  { id: "sevi-009", courseCode: "SEVI 30103", courseName: "Strategic Management", section: "-009", days: "T/Th", startTime: "11:00 AM", endTime: "12:15 PM", instructor: "Welsh", cap: 48, room: "JBHT 146", hrs: 3 },
-  { id: "sevi-010", courseCode: "SEVI 30103", courseName: "Strategic Management", section: "-010", days: "T/Th", startTime: "12:30 PM", endTime: "1:45 PM", instructor: "Cummings", cap: 48, room: "JBHT 148", hrs: 3 },
-  { id: "sevi-011", courseCode: "SEVI 30103", courseName: "Strategic Management", section: "-011", days: "T/Th", startTime: "2:00 PM", endTime: "3:15 PM", instructor: "Welsh", cap: 48, room: "JBHT 147", hrs: 3 },
-  { id: "sevi-012", courseCode: "SEVI 30103", courseName: "Strategic Management", section: "-012", days: "T/Th", startTime: "3:30 PM", endTime: "4:45 PM", instructor: "Core", cap: 40, room: "WCOB 431", hrs: 3 },
-  { id: "sevi-013", courseCode: "SEVI 30103", courseName: "Strategic Management", section: "-013", days: "T/Th", startTime: "5:00 PM", endTime: "6:15 PM", instructor: "Core", cap: 48, room: "JBHT 148", hrs: 3 },
-  { id: "sevi-014", courseCode: "SEVI 30103", courseName: "Strategic Management", section: "-014", days: "MW", startTime: "5:00 PM", endTime: "6:15 PM", instructor: "Paul", cap: 48, room: "JBHT 146", hrs: 3 },
-  { id: "sevi-015", courseCode: "SEVI 30103", courseName: "Strategic Management", section: "-015", days: "MW", startTime: "6:30 PM", endTime: "7:45 PM", instructor: "Paul", cap: 42, room: "WCOB 431", hrs: 3 },
-  { id: "sevi-016", courseCode: "SEVI 30103", courseName: "Strategic Management", section: "-016", days: "T/Th", startTime: "8:00 AM", endTime: "9:15 AM", instructor: "Cummings", cap: 48, room: "JBHT 146", hrs: 3 },
-  { id: "sevi-017", courseCode: "SEVI 30103", courseName: "Strategic Management", section: "-017", days: "T/Th", startTime: "9:30 AM", endTime: "10:45 AM", instructor: "Cooper", cap: 50, room: "JBHT 147", hrs: 3 },
-  { id: "sevi-018", courseCode: "SEVI 30103", courseName: "Strategic Management", section: "-018", days: "T/Th", startTime: "11:00 AM", endTime: "12:15 PM", instructor: "Cooper", cap: 42, room: "JBHT 239", hrs: 3 },
-  { id: "sevi-019", courseCode: "SEVI 30103", courseName: "Strategic Management", section: "-019", days: "T/Th", startTime: "12:30 PM", endTime: "1:45 PM", instructor: "Andrus", cap: 50, room: "JBHT 147", hrs: 3 },
-  { id: "sevi-020", courseCode: "SEVI 30103", courseName: "Strategic Management", section: "-020", days: "T/Th", startTime: "2:00 PM", endTime: "3:15 PM", instructor: "Andrus", cap: 48, room: "JBHT 148", hrs: 3 },
+// Transform days string to internal format
+function normalizeDays(days: string): string {
+  if (days === "Mon/Wed/Fri") return "MWF"
+  if (days === "Mon/Wed") return "MW"
+  if (days === "Tue/Thu") return "T/Th"
+  if (days === "Mon") return "Mon"
+  if (days === "Tue") return "Tue"
+  if (days === "Wed") return "Wed"
+  if (days === "Thu") return "Thu"
+  if (days === "Fri") return "Fri"
+  return days
+}
 
-  // ECON 31303 Intermediate Macroeconomics — 1 section
-  { id: "econ313-001", courseCode: "ECON 31303", courseName: "Intermediate Macroeconomics", section: "-001", days: "T/Th", startTime: "9:30 AM", endTime: "10:45 AM", instructor: "Leite", cap: 55, room: "SCEN 501", hrs: 3 },
-
-  // ECON 47403 Introduction to Econometrics — 2 sections
-  { id: "econ474-001", courseCode: "ECON 47403", courseName: "Introduction to Econometrics", section: "-001", days: "T/Th", startTime: "11:00 AM", endTime: "12:15 PM", instructor: "Hossain", cap: 20, room: "WCOB 433", hrs: 4 },
-  { id: "econ474-002", courseCode: "ECON 47403", courseName: "Introduction to Econometrics", section: "-002", days: "Tue", startTime: "6:00 PM", endTime: "8:45 PM", instructor: "Xu", cap: 20, room: "WCOB 437", hrs: 4 },
-
-  // FINN 30103 Financial Analysis — 3 sections
-  { id: "finn301-001", courseCode: "FINN 30103", courseName: "Financial Analysis", section: "-001", days: "T/Th", startTime: "11:00 AM", endTime: "12:15 PM", instructor: "Acrey", cap: 270, room: "RCED 120", hrs: 3 },
-  { id: "finn301-002", courseCode: "FINN 30103", courseName: "Financial Analysis", section: "-002", days: "T/Th", startTime: "8:00 AM", endTime: "9:15 AM", instructor: "Dubowsky", cap: 65, room: "WCOB 116", hrs: 3 },
-  { id: "finn301-003", courseCode: "FINN 30103", courseName: "Financial Analysis", section: "-003", days: "T/Th", startTime: "12:30 PM", endTime: "1:45 PM", instructor: "Dubowsky", cap: 65, room: "WJWH 403", hrs: 3 },
-
-  // ASTR 10003 Intro to Astronomy — 2 sections
-  { id: "astr100-001", courseCode: "ASTR 10003", courseName: "Survey of Astronomy", section: "-001", days: "MWF", startTime: "10:45 AM", endTime: "11:35 AM", instructor: "TBA", cap: 120, room: "PHYS 133", hrs: 3 },
-  { id: "astr100-002", courseCode: "ASTR 10003", courseName: "Survey of Astronomy", section: "-002", days: "MWF", startTime: "12:55 PM", endTime: "1:45 PM", instructor: "TBA", cap: 120, room: "PHYS 133", hrs: 3 },
-
-  // ASTR 10001 Astronomy Lab — 3 sections
-  { id: "astr101-001", courseCode: "ASTR 10001", courseName: "Astronomy Lab", section: "-001", days: "Tue", startTime: "2:00 PM", endTime: "3:50 PM", instructor: "TBA", cap: 24, room: "PHYS 226", hrs: 1 },
-  { id: "astr101-002", courseCode: "ASTR 10001", courseName: "Astronomy Lab", section: "-002", days: "Wed", startTime: "2:00 PM", endTime: "3:50 PM", instructor: "TBA", cap: 24, room: "PHYS 226", hrs: 1 },
-  { id: "astr101-003", courseCode: "ASTR 10001", courseName: "Astronomy Lab", section: "-003", days: "Thu", startTime: "2:00 PM", endTime: "3:50 PM", instructor: "TBA", cap: 24, room: "PHYS 226", hrs: 1 },
-
-  // ENSC 10003 Intro to Environmental Science — 2 sections
-  { id: "ensc100-001", courseCode: "ENSC 10003", courseName: "Intro to Environmental Science", section: "-001", days: "T/Th", startTime: "9:30 AM", endTime: "10:45 AM", instructor: "TBA", cap: 150, room: "SCEN 101", hrs: 3 },
-  { id: "ensc100-002", courseCode: "ENSC 10003", courseName: "Intro to Environmental Science", section: "-002", days: "T/Th", startTime: "11:00 AM", endTime: "12:15 PM", instructor: "TBA", cap: 150, room: "SCEN 101", hrs: 3 },
-
-  // ENSC 10001 Environmental Science Lab — 3 sections
-  { id: "ensc101-001", courseCode: "ENSC 10001", courseName: "Environmental Science Lab", section: "-001", days: "Mon", startTime: "2:00 PM", endTime: "3:50 PM", instructor: "TBA", cap: 24, room: "SCEN 205", hrs: 1 },
-  { id: "ensc101-002", courseCode: "ENSC 10001", courseName: "Environmental Science Lab", section: "-002", days: "Wed", startTime: "2:00 PM", endTime: "3:50 PM", instructor: "TBA", cap: 24, room: "SCEN 205", hrs: 1 },
-  { id: "ensc101-003", courseCode: "ENSC 10001", courseName: "Environmental Science Lab", section: "-003", days: "Fri", startTime: "11:50 AM", endTime: "1:40 PM", instructor: "TBA", cap: 24, room: "SCEN 205", hrs: 1 },
-
-  // PHYS 10103 Intro to Physics — 2 sections
-  { id: "phys101-001", courseCode: "PHYS 10103", courseName: "Physics in the Modern World", section: "-001", days: "MWF", startTime: "9:40 AM", endTime: "10:30 AM", instructor: "TBA", cap: 100, room: "PHYS 133", hrs: 3 },
-  { id: "phys101-002", courseCode: "PHYS 10103", courseName: "Physics in the Modern World", section: "-002", days: "MWF", startTime: "11:50 AM", endTime: "12:40 PM", instructor: "TBA", cap: 100, room: "PHYS 133", hrs: 3 },
-
-  // PHYS 10101 Physics Lab — 3 sections
-  { id: "phys102-001", courseCode: "PHYS 10101", courseName: "Physics Lab", section: "-001", days: "Tue", startTime: "3:30 PM", endTime: "5:20 PM", instructor: "TBA", cap: 24, room: "PHYS 117", hrs: 1 },
-  { id: "phys102-002", courseCode: "PHYS 10101", courseName: "Physics Lab", section: "-002", days: "Thu", startTime: "3:30 PM", endTime: "5:20 PM", instructor: "TBA", cap: 24, room: "PHYS 117", hrs: 1 },
-  { id: "phys102-003", courseCode: "PHYS 10101", courseName: "Physics Lab", section: "-003", days: "Wed", startTime: "3:30 PM", endTime: "5:20 PM", instructor: "TBA", cap: 24, room: "PHYS 117", hrs: 1 },
-]
+// Build sections from imported data
+const allSections: Section[] = SECTIONS.map(s => {
+  const courseInfo = COURSES.find(c => c.id === s.course)
+  return {
+    id: `${s.course}-${s.section}`,
+    courseCode: s.course,
+    courseName: s.name,
+    section: `-${s.section}`,
+    days: normalizeDays(s.days),
+    startTime: s.startTime,
+    endTime: s.endTime,
+    instructor: s.instructor,
+    cap: s.cap,
+    room: s.location,
+    hrs: courseInfo?.credits || 3
+  }
+})
 
 /* ------------------------------------------------------------------ */
 /*  Helper Functions                                                    */
@@ -371,19 +340,24 @@ export function ScheduleBuilder({ planned, onRemove }: Props) {
     return { status: "ok" as const, reason: "" }
   }
 
-  // Optimize schedule
+  // Optimize schedule - uses OPTIMAL_SECTIONS from course-data.ts
   const optimizeSchedule = () => {
     setOptimizing(true)
     setTimeout(() => {
-      // Hardcoded optimal schedule for Jordan
-      setSelectedSections({
-        "FINN 30103": allSections.find(s => s.id === "finn301-002")!,
-        "ECON 31303": allSections.find(s => s.id === "econ313-001")!,
-        "ECON 47403": allSections.find(s => s.id === "econ474-001")!,
-        "SEVI 30103": allSections.find(s => s.id === "sevi-001")!,
-        "ASTR 10003": allSections.find(s => s.id === "astr100-001")!,
-        "ASTR 10001": allSections.find(s => s.id === "astr101-001")!,
+      // Build optimal schedule from OPTIMAL_SECTIONS, but only for selected courses
+      const newSelections: Record<string, Section> = {}
+      OPTIMAL_SECTIONS.forEach(opt => {
+        // Only add if this course is in the planned courses
+        if (plannedCodes.has(opt.course)) {
+          const section = allSections.find(s => 
+            s.courseCode === opt.course && s.section === `-${opt.section}`
+          )
+          if (section) {
+            newSelections[opt.course] = section
+          }
+        }
       })
+      setSelectedSections(newSelections)
       setOptimizing(false)
       setShowExplanation(true)
     }, 1500)
