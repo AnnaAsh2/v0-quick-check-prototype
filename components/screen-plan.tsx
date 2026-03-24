@@ -227,7 +227,7 @@ export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
   }, [analyzing, onRunCheck])
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 py-10">
+    <div className={`mx-auto flex w-full flex-1 flex-col gap-6 px-6 py-10 ${mode === "schedule" ? "max-w-7xl" : "max-w-2xl"}`}>
       {/* Header */}
       <div>
         <div className="mb-2 flex items-center gap-2">

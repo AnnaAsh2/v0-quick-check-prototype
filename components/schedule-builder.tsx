@@ -191,6 +191,13 @@ export function ScheduleBuilder({ planned, onRemove }: Props) {
   const [timeBlocks, setTimeBlocks] = useState<TimeBlock[]>([
     { id: "work", days: ["Thu"], startTime: "1:00 PM", endTime: "5:00 PM", label: "Work" }
   ])
+  
+  // Block creation mode
+  const [isAddingBlock, setIsAddingBlock] = useState(false)
+  const [newBlockStart, setNewBlockStart] = useState<{ day: string, hour: number } | null>(null)
+  const [newBlockEnd, setNewBlockEnd] = useState<{ day: string, hour: number } | null>(null)
+  const [newBlockLabel, setNewBlockLabel] = useState("")
+  const [showBlockLabelInput, setShowBlockLabelInput] = useState(false)
 
   // Preferences
   const [preferences, setPreferences] = useState<Preference[]>([
@@ -279,6 +286,65 @@ export function ScheduleBuilder({ planned, onRemove }: Props) {
     setPreferences(prev => prev.map(p => 
       p.id === id ? { ...p, enabled: !p.enabled } : p
     ))
+  }
+
+  // Format hour to time string
+  const formatHour = (hour: number): string => {
+    const period = hour >= 12 ? "PM" : "AM"
+    const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour
+    return `${displayHour}:00 ${period}`
+  }
+
+  // Handle calendar cell click for block creation
+  const handleCalendarClick = (day: string, hour: number) => {
+    if (!isAddingBlock) return
+    
+    if (!newBlockStart) {
+      // First click - set start
+      setNewBlockStart({ day, hour })
+      setNewBlockEnd({ day, hour: hour + 1 })
+    } else if (newBlockStart.day === day) {
+      // Second click on same day - set end and show label input
+      const endHour = Math.max(newBlockStart.hour + 1, hour + 1)
+      setNewBlockEnd({ day, hour: endHour })
+      setShowBlockLabelInput(true)
+    } else {
+      // Click on different day - reset and start new
+      setNewBlockStart({ day, hour })
+      setNewBlockEnd({ day, hour: hour + 1 })
+    }
+  }
+
+  // Handle drag to extend block
+  const handleCalendarDrag = (day: string, hour: number) => {
+    if (!isAddingBlock || !newBlockStart || newBlockStart.day !== day) return
+    const endHour = Math.max(newBlockStart.hour + 1, hour + 1)
+    setNewBlockEnd({ day, hour: endHour })
+  }
+
+  // Confirm block creation
+  const confirmBlock = () => {
+    if (!newBlockStart || !newBlockEnd) return
+    
+    const newBlock: TimeBlock = {
+      id: `block-${Date.now()}`,
+      days: [newBlockStart.day],
+      startTime: formatHour(newBlockStart.hour),
+      endTime: formatHour(newBlockEnd.hour),
+      label: newBlockLabel || "Busy"
+    }
+    
+    setTimeBlocks(prev => [...prev, newBlock])
+    cancelBlockCreation()
+  }
+
+  // Cancel block creation
+  const cancelBlockCreation = () => {
+    setIsAddingBlock(false)
+    setNewBlockStart(null)
+    setNewBlockEnd(null)
+    setNewBlockLabel("")
+    setShowBlockLabelInput(false)
   }
 
   // Select a section
@@ -384,10 +450,50 @@ export function ScheduleBuilder({ planned, onRemove }: Props) {
                 </button>
               </div>
             ))}
-            <button className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors py-1">
-              <Plus className="h-3 w-3" />
-              Add block
-            </button>
+            {isAddingBlock ? (
+              <div className="flex flex-col gap-2 rounded-md border border-amber-300 bg-amber-50 p-2">
+                <span className="text-[10px] font-medium text-amber-700">
+                  {!newBlockStart 
+                    ? "Click on the calendar to set start time" 
+                    : !showBlockLabelInput 
+                      ? "Click again to set end time (or drag)" 
+                      : "Name this time block"}
+                </span>
+                {showBlockLabelInput && (
+                  <div className="flex flex-col gap-2">
+                    <input
+                      type="text"
+                      placeholder="e.g., Work, Gym, Study..."
+                      value={newBlockLabel}
+                      onChange={(e) => setNewBlockLabel(e.target.value)}
+                      className="w-full rounded border px-2 py-1 text-xs"
+                      autoFocus
+                    />
+                    <div className="flex gap-1">
+                      <Button size="sm" className="h-6 text-[10px] flex-1" onClick={confirmBlock}>
+                        Add
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={cancelBlockCreation}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {!showBlockLabelInput && (
+                  <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={cancelBlockCreation}>
+                    Cancel
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <button 
+                onClick={() => setIsAddingBlock(true)}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
+              >
+                <Plus className="h-3 w-3" />
+                Add block
+              </button>
+            )}
           </div>
         </div>
 
@@ -546,8 +652,36 @@ export function ScheduleBuilder({ planned, onRemove }: Props) {
                   <div className="p-1 text-[9px] text-muted-foreground text-right pr-2">
                     {hour > 12 ? `${hour - 12}PM` : hour === 12 ? "12PM" : `${hour}AM`}
                   </div>
-                  {days.map(day => (
-                    <div key={day} className="border-l relative">
+                  {days.map(day => {
+                    // Check if this cell is part of the new block being created
+                    const isInNewBlock = isAddingBlock && newBlockStart && newBlockEnd && 
+                      newBlockStart.day === day && 
+                      hour >= newBlockStart.hour && 
+                      hour < newBlockEnd.hour
+                    
+                    return (
+                    <div 
+                      key={day} 
+                      className={`border-l relative ${isAddingBlock ? "cursor-crosshair" : ""} ${isInNewBlock ? "bg-amber-100" : ""}`}
+                      onClick={() => handleCalendarClick(day, hour)}
+                      onMouseEnter={(e) => {
+                        if (e.buttons === 1) handleCalendarDrag(day, hour)
+                      }}
+                    >
+                      {/* New block preview */}
+                      {isInNewBlock && hour === newBlockStart.hour && (
+                        <div className="absolute inset-x-0 bg-amber-200 border-2 border-amber-400 border-dashed z-10 pointer-events-none"
+                          style={{
+                            top: 0,
+                            height: `${(newBlockEnd.hour - newBlockStart.hour) * 48}px`
+                          }}
+                        >
+                          <span className="text-[9px] font-semibold text-amber-700 px-1">
+                            {formatHour(newBlockStart.hour)} - {formatHour(newBlockEnd.hour)}
+                          </span>
+                        </div>
+                      )}
+                      
                       {/* Constraint blocks (RED - blocked times) */}
                       {timeBlocks.map(block => {
                         if (!block.days.includes(day)) return null
@@ -662,7 +796,8 @@ export function ScheduleBuilder({ planned, onRemove }: Props) {
                         )
                       })}
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               ))}
             </div>
