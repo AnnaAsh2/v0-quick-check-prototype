@@ -193,7 +193,7 @@ export function ScreenReview({ planned }: { planned: Course[] }) {
 
   if (view === "approve-email") {
     return (
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-6 py-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-8">
         <button onClick={() => setView("review")} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit">
           <ArrowLeft className="h-3.5 w-3.5" /> Back to Review
         </button>
@@ -233,7 +233,7 @@ export function ScreenReview({ planned }: { planned: Course[] }) {
 
   if (view === "meeting-email") {
     return (
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-6 py-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-8">
         <button onClick={() => setView("review")} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit">
           <ArrowLeft className="h-3.5 w-3.5" /> Back to Review
         </button>
@@ -272,7 +272,7 @@ export function ScreenReview({ planned }: { planned: Course[] }) {
 
   if (view === "meeting-prep") {
     return (
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-6 py-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-8">
         <button onClick={() => setView("meeting-email")} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit">
           <ArrowLeft className="h-3.5 w-3.5" /> Back to Meeting Email
         </button>
@@ -356,7 +356,7 @@ export function ScreenReview({ planned }: { planned: Course[] }) {
 
   if (view === "question-email") {
     return (
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-6 py-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-8">
         <button onClick={() => setView("review")} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit">
           <ArrowLeft className="h-3.5 w-3.5" /> Back to Review
         </button>
@@ -408,7 +408,7 @@ export function ScreenReview({ planned }: { planned: Course[] }) {
   /*  Main review view                                                 */
   /* ---------------------------------------------------------------- */
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-6 py-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-8">
       {/* Header */}
       <div>
         <div className="mb-1 flex items-center gap-2">

@@ -548,7 +548,7 @@ export function ScheduleBuilder({ planned, onRemove }: Props) {
                   </div>
                   {days.map(day => (
                     <div key={day} className="border-l relative">
-                      {/* Constraint blocks */}
+                      {/* Constraint blocks (RED - blocked times) */}
                       {timeBlocks.map(block => {
                         if (!block.days.includes(day)) return null
                         const blockStart = parseTime(block.startTime)
@@ -564,21 +564,64 @@ export function ScheduleBuilder({ planned, onRemove }: Props) {
                         return (
                           <div
                             key={block.id}
-                            className="absolute inset-x-0 bg-gray-200 border border-gray-300"
+                            className="absolute inset-x-0 bg-red-100 border border-red-300"
                             style={{
                               top: `${top}px`,
                               height: `${height}px`,
-                              backgroundImage: "repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(0,0,0,0.1) 3px, rgba(0,0,0,0.1) 6px)"
+                              backgroundImage: "repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(220,38,38,0.15) 3px, rgba(220,38,38,0.15) 6px)"
                             }}
                           >
                             {blockStart >= hourStart && blockStart < hourEnd && (
-                              <span className="text-[8px] font-medium text-gray-600 px-1 truncate block">
+                              <span className="text-[8px] font-semibold text-red-700 px-1 truncate block">
                                 {block.label}
                               </span>
                             )}
                           </div>
                         )
                       })}
+                      
+                      {/* Preferred time blocks (GREEN - based on preferences) */}
+                      {(() => {
+                        const morningPref = preferences.find(p => p.id === "morning")?.enabled
+                        const afternoonPref = preferences.find(p => p.id === "afternoon")?.enabled
+                        const hourStart = hour * 60
+                        const hourEnd = (hour + 1) * 60
+                        
+                        // Morning preference: 8 AM - 12 PM (480-720 mins)
+                        if (morningPref && hourStart >= 480 && hourEnd <= 720) {
+                          // Check if there's a blocked time in this slot
+                          const hasBlock = timeBlocks.some(block => 
+                            block.days.includes(day) && 
+                            timeOverlaps(parseTime(block.startTime), parseTime(block.endTime), hourStart, hourEnd)
+                          )
+                          if (!hasBlock) {
+                            return (
+                              <div
+                                className="absolute inset-0 bg-emerald-50 border-l border-r border-emerald-100 pointer-events-none"
+                                style={{ opacity: 0.7 }}
+                              />
+                            )
+                          }
+                        }
+                        
+                        // Afternoon preference: 12 PM - 6 PM (720-1080 mins)
+                        if (afternoonPref && hourStart >= 720 && hourEnd <= 1080) {
+                          const hasBlock = timeBlocks.some(block => 
+                            block.days.includes(day) && 
+                            timeOverlaps(parseTime(block.startTime), parseTime(block.endTime), hourStart, hourEnd)
+                          )
+                          if (!hasBlock) {
+                            return (
+                              <div
+                                className="absolute inset-0 bg-emerald-50 border-l border-r border-emerald-100 pointer-events-none"
+                                style={{ opacity: 0.7 }}
+                              />
+                            )
+                          }
+                        }
+                        
+                        return null
+                      })()}
                       
                       {/* Course blocks */}
                       {Object.values(selectedSections).map(section => {
@@ -623,6 +666,24 @@ export function ScheduleBuilder({ planned, onRemove }: Props) {
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+        
+        {/* Legend */}
+        <div className="flex items-center gap-4 text-[10px] text-muted-foreground px-1">
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded bg-red-100 border border-red-300" style={{
+              backgroundImage: "repeating-linear-gradient(45deg, transparent, transparent 1px, rgba(220,38,38,0.15) 1px, rgba(220,38,38,0.15) 2px)"
+            }} />
+            <span>Blocked</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded bg-emerald-50 border border-emerald-200" />
+            <span>Preferred</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded bg-sky-100 border border-sky-300" />
+            <span>Scheduled</span>
           </div>
         </div>
         

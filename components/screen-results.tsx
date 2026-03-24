@@ -256,7 +256,7 @@ export function ScreenResults({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-6 py-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-8">
       {/* ========== Overall assessment banner ========== */}
       <div className={`overflow-hidden rounded-2xl border border-l-4 ${bannerAccent[suggestionSeverity]} bg-card shadow-sm`}>
         <div className="border-b bg-muted/40 px-6 py-4">
