@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import {
-  Search, X, CheckCircle, Calendar, Plus, ArrowRightLeft,
+  Search, X, CheckCircle, BookOpen, Plus, ArrowRightLeft,
   Lightbulb, ChevronDown, ChevronUp, AlertTriangle, Lock, Sparkles,
 } from "lucide-react"
 import type { Course } from "@/lib/validation"
@@ -275,7 +275,7 @@ export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
               : "text-muted-foreground hover:text-foreground"
           }`}
         >
-          <Calendar className="h-3.5 w-3.5" />
+          <BookOpen className="h-3.5 w-3.5" />
           Your Schedule
         </button>
       </div>
