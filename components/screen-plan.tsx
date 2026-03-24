@@ -624,6 +624,7 @@ function RequirementGroupCard({
               <div className="flex flex-col gap-2">
                 {recommended.slice(0, 8).map(c => {
                   const added = plannedCodes.has(c.code)
+                  const isOnDegreePlan = c.code === "ECON 47403"
                   return (
                     <div
                       key={c.code}
@@ -633,9 +634,17 @@ function RequirementGroupCard({
                       className={`relative flex flex-col gap-1 rounded-lg border px-3.5 py-3 text-left transition-all ${
                         added
                           ? "border-emerald-300 bg-emerald-50"
-                          : "cursor-pointer bg-card hover:border-primary/30 hover:shadow-sm"
+                          : isOnDegreePlan
+                            ? "cursor-pointer border-amber-300 bg-amber-50 ring-1 ring-amber-200 hover:border-amber-400 hover:shadow-sm"
+                            : "cursor-pointer bg-card hover:border-primary/30 hover:shadow-sm"
                       }`}
                     >
+                      {isOnDegreePlan && !added && (
+                        <div className="absolute -top-2 left-3 flex items-center gap-1 rounded-full bg-amber-500 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white shadow-sm">
+                          <Sparkles className="h-2.5 w-2.5" />
+                          On 8-Semester Plan
+                        </div>
+                      )}
                       {added && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onRemove(c.code) }}
@@ -645,17 +654,17 @@ function RequirementGroupCard({
                           <X className="h-3 w-3" />
                         </button>
                       )}
-                      <div className="flex items-center gap-2 pr-6">
+                      <div className={`flex items-center gap-2 pr-6 ${isOnDegreePlan && !added ? "mt-1" : ""}`}>
                         {added ? (
                           <CheckCircle className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
                         ) : (
-                          <Plus className="h-3.5 w-3.5 shrink-0 text-primary" />
+                          <Plus className={`h-3.5 w-3.5 shrink-0 ${isOnDegreePlan ? "text-amber-600" : "text-primary"}`} />
                         )}
-                        <span className={`text-xs font-semibold ${added ? "text-emerald-800" : "text-foreground"}`}>{c.code}</span>
-                        <span className={`text-xs ${added ? "text-emerald-700" : "text-foreground"}`}>{c.name}</span>
-                        <span className={`ml-auto text-[10px] font-medium ${added ? "text-emerald-600" : "text-muted-foreground"}`}>{c.hrs} hrs</span>
+                        <span className={`text-xs font-semibold ${added ? "text-emerald-800" : isOnDegreePlan ? "text-amber-900" : "text-foreground"}`}>{c.code}</span>
+                        <span className={`text-xs ${added ? "text-emerald-700" : isOnDegreePlan ? "text-amber-800" : "text-foreground"}`}>{c.name}</span>
+                        <span className={`ml-auto text-[10px] font-medium ${added ? "text-emerald-600" : isOnDegreePlan ? "text-amber-700" : "text-muted-foreground"}`}>{c.hrs} hrs</span>
                       </div>
-                      <p className={`pl-[1.375rem] text-[10px] leading-relaxed ${added ? "text-emerald-600" : "text-muted-foreground"}`}>
+                      <p className={`pl-[1.375rem] text-[10px] leading-relaxed ${added ? "text-emerald-600" : isOnDegreePlan ? "text-amber-700" : "text-muted-foreground"}`}>
                         {added ? "Added to your schedule" : c.note}
                       </p>
                     </div>
