@@ -914,22 +914,32 @@ export function ScheduleBuilder({ planned, onRemove, onRemoveCourse, selectedSec
                         const bottom = Math.min(48, (sectionEnd - hourStart) / 60 * 48)
                         const height = bottom - top
                         
-                        const colorClass = getCourseColor(section.courseCode)
+                        // Check if this section has any conflicts
+                        const hasConflict = getConflicts.some(c => c.sectionId === section.id)
+                        const colorClass = hasConflict 
+                          ? "bg-red-100 border-red-400 ring-2 ring-red-400/50" 
+                          : getCourseColor(section.courseCode)
                         
                         return (
                           <div
                             key={section.id}
-                            className={`absolute inset-x-0.5 rounded border ${colorClass} overflow-hidden`}
+                            className={`absolute inset-x-0.5 rounded border ${colorClass} overflow-hidden ${hasConflict ? "z-20" : ""}`}
                             style={{
                               top: `${top}px`,
                               height: `${height}px`,
                             }}
                           >
                             {sectionStart >= hourStart && sectionStart < hourEnd && (
-                              <div className="p-0.5 text-[8px] leading-tight">
-                                <div className="font-bold truncate">{section.courseCode}</div>
+                              <div className={`p-0.5 text-[8px] leading-tight ${hasConflict ? "text-red-800" : ""}`}>
+                                <div className="font-bold truncate flex items-center gap-0.5">
+                                  {hasConflict && <AlertTriangle className="h-2.5 w-2.5 text-red-600 flex-shrink-0" />}
+                                  {section.courseCode}
+                                </div>
                                 <div className="truncate opacity-75">{section.section} · {section.instructor}</div>
-                                {section.cap < 40 && (
+                                {hasConflict && (
+                                  <div className="text-red-600 font-semibold">CONFLICT</div>
+                                )}
+                                {!hasConflict && section.cap < 40 && (
                                   <div className="text-amber-700">Cap: {section.cap}</div>
                                 )}
                               </div>
