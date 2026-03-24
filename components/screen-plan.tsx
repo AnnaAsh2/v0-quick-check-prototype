@@ -575,6 +575,8 @@ function RequirementGroupCard({
             <div className="flex flex-col gap-2">
               {critical.map(c => {
                 const added = plannedCodes.has(c.code)
+                const degreePlanCourses = ["SEVI 30103", "ECON 31303", "ECON 47403", "FINN 30103"]
+                const isOnDegreePlan = degreePlanCourses.includes(c.code)
                 return (
                   <div
                     key={c.code}
@@ -584,9 +586,17 @@ function RequirementGroupCard({
                     className={`relative flex flex-col gap-1.5 rounded-lg border-2 px-4 py-3.5 text-left transition-all ${
                       added
                         ? "border-emerald-300 bg-emerald-50"
-                        : "cursor-pointer border-primary/20 bg-primary/[0.04] hover:border-primary/40 hover:bg-primary/[0.08]"
+                        : isOnDegreePlan
+                          ? "cursor-pointer border-amber-300 bg-amber-50 ring-1 ring-amber-200 hover:border-amber-400 hover:shadow-sm"
+                          : "cursor-pointer border-primary/20 bg-primary/[0.04] hover:border-primary/40 hover:bg-primary/[0.08]"
                     }`}
                   >
+                    {isOnDegreePlan && !added && (
+                      <div className="absolute -top-2.5 left-3 flex items-center gap-1 rounded-full bg-amber-500 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white shadow-sm">
+                        <Sparkles className="h-2.5 w-2.5" />
+                        On 8-Semester Plan
+                      </div>
+                    )}
                     {added && (
                       <button
                         onClick={(e) => { e.stopPropagation(); onRemove(c.code) }}
@@ -596,21 +606,23 @@ function RequirementGroupCard({
                         <X className="h-3.5 w-3.5" />
                       </button>
                     )}
-                    <div className="flex items-center gap-2 pr-6">
+                    <div className={`flex items-center gap-2 pr-6 ${isOnDegreePlan && !added ? "mt-1" : ""}`}>
                       {added ? (
                         <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600" />
                       ) : (
-                        <Sparkles className="h-4 w-4 shrink-0 text-primary" />
+                        <Sparkles className={`h-4 w-4 shrink-0 ${isOnDegreePlan ? "text-amber-600" : "text-primary"}`} />
                       )}
-                      <span className={`text-sm font-semibold ${added ? "text-emerald-800" : "text-foreground"}`}>{c.code}</span>
-                      <span className={`text-sm ${added ? "text-emerald-700" : "text-foreground"}`}>{c.name}</span>
+                      <span className={`text-sm font-semibold ${added ? "text-emerald-800" : isOnDegreePlan ? "text-amber-900" : "text-foreground"}`}>{c.code}</span>
+                      <span className={`text-sm ${added ? "text-emerald-700" : isOnDegreePlan ? "text-amber-800" : "text-foreground"}`}>{c.name}</span>
                       <Badge className={`ml-auto shrink-0 text-[10px] font-bold ${
                         added
                           ? "border-emerald-300 bg-emerald-100 text-emerald-700"
-                          : "border-primary/20 bg-primary/10 text-primary"
+                          : isOnDegreePlan
+                            ? "border-amber-300 bg-amber-100 text-amber-700"
+                            : "border-primary/20 bg-primary/10 text-primary"
                       }`}>{c.hrs} hrs</Badge>
                     </div>
-                    <p className={`pl-6 text-[11px] leading-relaxed ${added ? "text-emerald-600" : "text-muted-foreground"}`}>
+                    <p className={`pl-6 text-[11px] leading-relaxed ${added ? "text-emerald-600" : isOnDegreePlan ? "text-amber-700" : "text-muted-foreground"}`}>
                       {added ? "Added to your schedule" : c.note}
                     </p>
                   </div>
