@@ -507,60 +507,66 @@ function RequirementGroupCard({
           {/* ======================================================== */}
           {/* SCIENCE PAIRS - auto-linked lecture+lab buttons            */}
           {/* ======================================================== */}
-          {isScience && group.sciencePairs!.map((pair) => {
-            const pairAdded = plannedCodes.has(pair.lecture.code) && plannedCodes.has(pair.lab.code)
-            return (
-              <div
-                key={pair.lecture.code}
-                className={`relative flex flex-col gap-2 rounded-lg border-2 px-4 py-3.5 text-left transition-all ${
-                  pairAdded
-                    ? "border-emerald-300 bg-emerald-50"
-                    : pair.lecture.priority === "recommended"
-                      ? "border-primary/20 bg-primary/[0.03] cursor-pointer hover:border-primary/40 hover:bg-primary/[0.06]"
-                      : "border-border bg-muted/20 cursor-pointer hover:border-muted-foreground/20 hover:bg-muted/40"
-                }`}
-                onClick={() => { if (!pairAdded) onAddPair(pair.lecture, pair.lab) }}
-                role="button"
-                tabIndex={0}
-              >
-                {pairAdded && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onRemove(pair.lecture.code) }}
-                    className="absolute right-2.5 top-2.5 rounded-full p-1 text-emerald-500 transition-colors hover:bg-emerald-100 hover:text-emerald-700"
-                    aria-label={`Remove ${pair.lecture.code} and ${pair.lab.code}`}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-                <div className="flex items-center gap-2 pr-6">
-                  {pairAdded ? (
-                    <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600" />
-                  ) : (
-                    <Plus className="h-4 w-4 shrink-0 text-primary" />
-                  )}
-                  <div className="flex flex-1 flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className={`text-sm font-semibold ${pairAdded ? "text-emerald-800" : "text-foreground"}`}>{pair.lecture.code}</span>
-                    <span className={`text-sm ${pairAdded ? "text-emerald-700" : "text-foreground"}`}>{pair.lecture.name}</span>
-                    <span className="text-[10px] text-muted-foreground">+</span>
-                    <span className={`text-sm font-semibold ${pairAdded ? "text-emerald-800" : "text-foreground"}`}>{pair.lab.code}</span>
-                    <span className={`text-sm ${pairAdded ? "text-emerald-700" : "text-foreground"}`}>{pair.lab.name}</span>
-                  </div>
-                  <Badge
-                    className={`shrink-0 text-[10px] font-bold ${
-                      pairAdded
-                        ? "border-emerald-300 bg-emerald-100 text-emerald-700"
-                        : "border-primary/20 bg-primary/10 text-primary"
-                    }`}
-                  >
-                    {pair.lecture.hrs + pair.lab.hrs} hrs
-                  </Badge>
-                </div>
-                <p className={`pl-6 text-[11px] leading-relaxed ${pairAdded ? "text-emerald-600" : "text-muted-foreground"}`}>
-                  {pairAdded ? "Added to your schedule (lecture + lab)" : pair.lecture.note}
-                </p>
+          {isScience && (
+            <>
+              <div className="flex items-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-[11px] text-amber-700 border border-amber-200">
+                <Sparkles className="h-3 w-3 shrink-0 text-amber-500" />
+                <span>All three options are on your 8-semester plan — choose one that fits your interests</span>
               </div>
-            )
-          })}
+              {group.sciencePairs!.map((pair) => {
+                const pairAdded = plannedCodes.has(pair.lecture.code) && plannedCodes.has(pair.lab.code)
+                return (
+                  <div
+                    key={pair.lecture.code}
+                    className={`relative flex flex-col gap-2 rounded-lg border-2 px-4 py-3.5 text-left transition-all ${
+                      pairAdded
+                        ? "border-emerald-300 bg-emerald-50"
+                        : "border-amber-200 bg-amber-50/50 cursor-pointer hover:border-amber-300 hover:bg-amber-50"
+                    }`}
+                    onClick={() => { if (!pairAdded) onAddPair(pair.lecture, pair.lab) }}
+                    role="button"
+                    tabIndex={0}
+                  >
+                    {pairAdded && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onRemove(pair.lecture.code) }}
+                        className="absolute right-2.5 top-2.5 rounded-full p-1 text-emerald-500 transition-colors hover:bg-emerald-100 hover:text-emerald-700"
+                        aria-label={`Remove ${pair.lecture.code} and ${pair.lab.code}`}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    <div className="flex items-center gap-2 pr-6">
+                      {pairAdded ? (
+                        <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600" />
+                      ) : (
+                        <Plus className="h-4 w-4 shrink-0 text-amber-600" />
+                      )}
+                      <div className="flex flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className={`text-sm font-semibold ${pairAdded ? "text-emerald-800" : "text-amber-900"}`}>{pair.lecture.code}</span>
+                        <span className={`text-sm ${pairAdded ? "text-emerald-700" : "text-amber-800"}`}>{pair.lecture.name}</span>
+                        <span className="text-[10px] text-muted-foreground">+</span>
+                        <span className={`text-sm font-semibold ${pairAdded ? "text-emerald-800" : "text-amber-900"}`}>{pair.lab.code}</span>
+                        <span className={`text-sm ${pairAdded ? "text-emerald-700" : "text-amber-800"}`}>{pair.lab.name}</span>
+                      </div>
+                      <Badge
+                        className={`shrink-0 text-[10px] font-bold ${
+                          pairAdded
+                            ? "border-emerald-300 bg-emerald-100 text-emerald-700"
+                            : "border-amber-300 bg-amber-100 text-amber-700"
+                        }`}
+                      >
+                        {pair.lecture.hrs + pair.lab.hrs} hrs
+                      </Badge>
+                    </div>
+                    <p className={`pl-6 text-[11px] leading-relaxed ${pairAdded ? "text-emerald-600" : "text-amber-700"}`}>
+                      {pairAdded ? "Added to your schedule (lecture + lab)" : pair.lecture.note}
+                    </p>
+                  </div>
+                )
+              })}
+            </>
+          )}
 
           {/* ======================================================== */}
           {/* CRITICAL courses - single select, prominent style         */}
@@ -624,7 +630,8 @@ function RequirementGroupCard({
               <div className="flex flex-col gap-2">
                 {recommended.slice(0, 8).map(c => {
                   const added = plannedCodes.has(c.code)
-                  const isOnDegreePlan = c.code === "ECON 47403"
+                  const degreePlanCourses = ["SEVI 30103", "ECON 31303", "ECON 47403", "FINN 30103"]
+                  const isOnDegreePlan = degreePlanCourses.includes(c.code)
                   return (
                     <div
                       key={c.code}
