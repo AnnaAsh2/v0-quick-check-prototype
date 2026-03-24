@@ -149,13 +149,10 @@ function isAfternoonSection(section: Section): boolean {
 interface Props {
   planned: Course[]
   onRemove: (code: string) => void
+  onRemoveCourse: (code: string) => void  // Remove course entirely from planned list
 }
 
-/* ------------------------------------------------------------------ */
-/*  Component                                                           */
-/* ------------------------------------------------------------------ */
-
-export function ScheduleBuilder({ planned, onRemove }: Props) {
+export function ScheduleBuilder({ planned, onRemove, onRemoveCourse }: Props) {
   // Constraints
   const [timeBlocks, setTimeBlocks] = useState<TimeBlock[]>([
     { id: "work", days: ["Thu"], startTime: "1:00 PM", endTime: "5:00 PM", label: "Work" }
@@ -620,6 +617,8 @@ export function ScheduleBuilder({ planned, onRemove }: Props) {
           const isSelected = !!selectedSections[courseCode]
           const sectionCount = sections.length
           const isLimited = sectionCount <= 2
+          const courseInfo = COURSES.find(c => c.id === courseCode)
+          const hasPrereqIssue = courseInfo && !courseInfo.prereqMet
           
           return (
             <div key={courseCode} className="rounded-lg border bg-card">
@@ -627,16 +626,45 @@ export function ScheduleBuilder({ planned, onRemove }: Props) {
               <div className="flex items-center justify-between border-b px-3 py-2">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-semibold">{courseCode}</span>
-                  <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
+                  <span className="text-[10px] text-muted-foreground truncate max-w-[100px]">
                     {sections[0].courseName}
                   </span>
                 </div>
-                <Badge 
-                  variant={isLimited ? "destructive" : "secondary"} 
-                  className="text-[9px] h-5"
-                >
-                  {sectionCount} section{sectionCount !== 1 ? "s" : ""}{isLimited && " !"}
-                </Badge>
+                <div className="flex items-center gap-1.5">
+                  {hasPrereqIssue && (
+                    <Badge 
+                      variant="outline" 
+                      className="text-[9px] h-5 border-amber-300 bg-amber-50 text-amber-700"
+                      title={courseInfo?.notes}
+                    >
+                      <AlertTriangle className="h-2.5 w-2.5 mr-0.5" />
+                      Prereq
+                    </Badge>
+                  )}
+                  <Badge 
+                    variant={isLimited ? "destructive" : "secondary"} 
+                    className="text-[9px] h-5"
+                  >
+                    {sectionCount} section{sectionCount !== 1 ? "s" : ""}{isLimited && " !"}
+                  </Badge>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      // Remove from selected sections
+                      setSelectedSections(prev => {
+                        const newSelections = { ...prev }
+                        delete newSelections[courseCode]
+                        return newSelections
+                      })
+                      // Remove from planned courses
+                      onRemoveCourse(courseCode)
+                    }}
+                    className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-500 transition-colors"
+                    title="Remove course"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
               </div>
               
               {/* Section List */}
@@ -679,7 +707,9 @@ export function ScheduleBuilder({ planned, onRemove }: Props) {
                       <span className="font-mono text-muted-foreground">{section.section}</span>
                       <span className="font-medium">{section.days}</span>
                       <span className="text-muted-foreground">{section.startTime}–{section.endTime}</span>
-                      <span className="text-muted-foreground truncate flex-1">{section.instructor}</span>
+                      <span className={`truncate flex-1 ${section.instructor === "TBA" ? "text-amber-600 italic" : "text-muted-foreground"}`}>
+                        {section.instructor}
+                      </span>
                       <Badge 
                         variant="outline" 
                         className={`text-[9px] h-4 ${section.cap < 40 ? "border-amber-300 bg-amber-50 text-amber-700" : ""}`}

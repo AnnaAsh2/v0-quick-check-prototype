@@ -425,7 +425,7 @@ export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
       {/*  MODE C: "Your Schedule" - Build weekly schedule              */}
       {/* ============================================================ */}
       {mode === "schedule" && (
-        <ScheduleBuilder planned={planned} onRemove={removeCourse} />
+        <ScheduleBuilder planned={planned} onRemove={removeCourse} onRemoveCourse={removeCourse} />
       )}
 
       {/* Run button / analysis animation */}
