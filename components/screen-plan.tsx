@@ -102,7 +102,7 @@ interface Props {
 /* ------------------------------------------------------------------ */
 
 export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
-  const [mode, setMode] = useState<"choose" | "guided">("choose")
+  const [mode, setMode] = useState<"choose" | "guided" | "schedule">("choose")
   const [query, setQuery] = useState("")
   const [showResults, setShowResults] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
@@ -267,6 +267,17 @@ export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
           <Lightbulb className="h-3.5 w-3.5" />
           What Should I Take?
         </button>
+        <button
+          onClick={() => setMode("schedule")}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all ${
+            mode === "schedule"
+              ? "bg-card text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <BookOpen className="h-3.5 w-3.5" />
+          Your Schedule
+        </button>
       </div>
 
       {/* ============================================================ */}
@@ -334,58 +345,58 @@ export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
       )}
 
       {/* ============================================================ */}
-      {/*  Planned courses list (always visible in both modes)          */}
+      {/*  MODE C: "Your Schedule" - View planned courses               */}
       {/* ============================================================ */}
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Your Schedule
-          </p>
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary" className="text-xs font-semibold">{planned.length} courses</Badge>
-            <Badge className="border-primary/20 bg-primary/10 text-xs font-semibold text-primary">{totalHrs} credit hours</Badge>
-          </div>
-        </div>
-
-        {planned.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed bg-muted/30 px-6 py-10 text-center">
-            <ArrowRightLeft className="h-6 w-6 text-muted-foreground" />
-            <p className="text-sm font-medium text-muted-foreground">No courses planned yet</p>
-            <p className="text-xs text-muted-foreground">
-              {mode === "choose"
-                ? "Use the search above to add courses"
-                : "Select courses from the recommendations above"}
+      {mode === "schedule" && (
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              Review your planned courses for Spring 2027. Use the other tabs to add more courses.
             </p>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="text-xs font-semibold">{planned.length} courses</Badge>
+              <Badge className="border-primary/20 bg-primary/10 text-xs font-semibold text-primary">{totalHrs} credit hours</Badge>
+            </div>
           </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {planned.map((c) => (
-              <div
-                key={c.code}
-                className="flex items-center justify-between rounded-xl border bg-card px-4 py-3.5 shadow-sm transition-all hover:shadow-md"
-              >
-                <div className="flex items-center gap-3">
-                  <Badge variant="secondary" className="shrink-0 font-mono text-xs">{c.code}</Badge>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium text-foreground">{c.name}</span>
-                    <span className="text-[11px] text-muted-foreground">{c.cat}</span>
+
+          {planned.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed bg-muted/30 px-6 py-10 text-center">
+              <ArrowRightLeft className="h-6 w-6 text-muted-foreground" />
+              <p className="text-sm font-medium text-muted-foreground">No courses planned yet</p>
+              <p className="text-xs text-muted-foreground">
+                Use the &quot;I Know What I Want&quot; or &quot;What Should I Take?&quot; tabs to add courses
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {planned.map((c) => (
+                <div
+                  key={c.code}
+                  className="flex items-center justify-between rounded-xl border bg-card px-4 py-3.5 shadow-sm transition-all hover:shadow-md"
+                >
+                  <div className="flex items-center gap-3">
+                    <Badge variant="secondary" className="shrink-0 font-mono text-xs">{c.code}</Badge>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-foreground">{c.name}</span>
+                      <span className="text-[11px] text-muted-foreground">{c.cat}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-medium text-muted-foreground">{c.hrs} hrs</span>
+                    <button
+                      onClick={() => removeCourse(c.code)}
+                      className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500"
+                      aria-label={`Remove ${c.code}`}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-medium text-muted-foreground">{c.hrs} hrs</span>
-                  <button
-                    onClick={() => removeCourse(c.code)}
-                    className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500"
-                    aria-label={`Remove ${c.code}`}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Run button / analysis animation */}
       {analyzing ? (
