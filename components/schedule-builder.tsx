@@ -146,17 +146,24 @@ function isAfternoonSection(section: Section): boolean {
 /*  Props                                                               */
 /* ------------------------------------------------------------------ */
 
+// Type for external selected sections state
+interface SelectedSectionData {
+  id: string
+  courseCode: string
+  section: string
+}
+
 interface Props {
   planned: Course[]
   onRemove: (code: string) => void
   onRemoveCourse: (code: string) => void  // Remove course entirely from planned list
+  selectedSections: Record<string, SelectedSectionData>
+  setSelectedSections: React.Dispatch<React.SetStateAction<Record<string, SelectedSectionData>>>
 }
 
-export function ScheduleBuilder({ planned, onRemove, onRemoveCourse }: Props) {
-  // Constraints
-  const [timeBlocks, setTimeBlocks] = useState<TimeBlock[]>([
-    { id: "work", days: ["Thu"], startTime: "1:00 PM", endTime: "5:00 PM", label: "Work" }
-  ])
+export function ScheduleBuilder({ planned, onRemove, onRemoveCourse, selectedSections: externalSelectedSections, setSelectedSections: setExternalSelectedSections }: Props) {
+  // Constraints - empty by default for demo
+  const [timeBlocks, setTimeBlocks] = useState<TimeBlock[]>([])
   
   // Block creation mode
   const [isAddingBlock, setIsAddingBlock] = useState(false)
@@ -165,9 +172,9 @@ export function ScheduleBuilder({ planned, onRemove, onRemoveCourse }: Props) {
   const [newBlockLabel, setNewBlockLabel] = useState("")
   const [showBlockLabelInput, setShowBlockLabelInput] = useState(false)
 
-  // Preferences
+  // Preferences - all disabled by default for demo
   const [preferences, setPreferences] = useState<Preference[]>([
-    { id: "morning", label: "Prefer morning classes", icon: <Sun className="h-3.5 w-3.5" />, enabled: true },
+    { id: "morning", label: "Prefer morning classes", icon: <Sun className="h-3.5 w-3.5" />, enabled: false },
     { id: "afternoon", label: "Prefer afternoon/evening", icon: <Moon className="h-3.5 w-3.5" />, enabled: false },
     { id: "tth", label: "Prefer T/Th schedule", icon: <Calendar className="h-3.5 w-3.5" />, enabled: false },
     { id: "mwf", label: "Prefer MWF schedule", icon: <Calendar className="h-3.5 w-3.5" />, enabled: false },
@@ -175,8 +182,43 @@ export function ScheduleBuilder({ planned, onRemove, onRemoveCourse }: Props) {
     { id: "no9am", label: "No classes before 9 AM", icon: <Clock className="h-3.5 w-3.5" />, enabled: false },
   ])
 
-  // Selected sections (one per course)
-  const [selectedSections, setSelectedSections] = useState<Record<string, Section>>({})
+  // Convert external selected sections to internal Section objects
+  const selectedSections = useMemo(() => {
+    const result: Record<string, Section> = {}
+    Object.entries(externalSelectedSections).forEach(([courseCode, data]) => {
+      const section = allSections.find(s => s.id === data.id)
+      if (section) {
+        result[courseCode] = section
+      }
+    })
+    return result
+  }, [externalSelectedSections])
+
+  // Wrapper to update external state
+  const setSelectedSections = (updater: Record<string, Section> | ((prev: Record<string, Section>) => Record<string, Section>)) => {
+    if (typeof updater === 'function') {
+      const newSections = updater(selectedSections)
+      const externalData: Record<string, SelectedSectionData> = {}
+      Object.entries(newSections).forEach(([courseCode, section]) => {
+        externalData[courseCode] = {
+          id: section.id,
+          courseCode: section.courseCode,
+          section: section.section
+        }
+      })
+      setExternalSelectedSections(externalData)
+    } else {
+      const externalData: Record<string, SelectedSectionData> = {}
+      Object.entries(updater).forEach(([courseCode, section]) => {
+        externalData[courseCode] = {
+          id: section.id,
+          courseCode: section.courseCode,
+          section: section.section
+        }
+      })
+      setExternalSelectedSections(externalData)
+    }
+  }
 
   // Optimization state
   const [optimizing, setOptimizing] = useState(false)

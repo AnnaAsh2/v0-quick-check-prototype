@@ -92,17 +92,26 @@ const scienceLinks: Record<string, string> = {
 /*  Props                                                               */
 /* ------------------------------------------------------------------ */
 
+// Type for selected sections (course code -> section data)
+interface SelectedSectionData {
+  id: string
+  courseCode: string
+  section: string
+}
+
 interface Props {
   planned: Course[]
   setPlanned: React.Dispatch<React.SetStateAction<Course[]>>
   onRunCheck: () => void
+  selectedSections: Record<string, SelectedSectionData>
+  setSelectedSections: React.Dispatch<React.SetStateAction<Record<string, SelectedSectionData>>>
 }
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                           */
 /* ------------------------------------------------------------------ */
 
-export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
+export function ScreenPlan({ planned, setPlanned, onRunCheck, selectedSections, setSelectedSections }: Props) {
   const [mode, setMode] = useState<"choose" | "guided" | "schedule">("choose")
   const [query, setQuery] = useState("")
   const [showResults, setShowResults] = useState(false)
@@ -425,7 +434,13 @@ export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
       {/*  MODE C: "Your Schedule" - Build weekly schedule              */}
       {/* ============================================================ */}
       {mode === "schedule" && (
-        <ScheduleBuilder planned={planned} onRemove={removeCourse} onRemoveCourse={removeCourse} />
+        <ScheduleBuilder 
+          planned={planned} 
+          onRemove={removeCourse} 
+          onRemoveCourse={removeCourse}
+          selectedSections={selectedSections}
+          setSelectedSections={setSelectedSections}
+        />
       )}
 
       {/* Run button / analysis animation */}
