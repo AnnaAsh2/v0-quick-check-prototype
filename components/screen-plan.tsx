@@ -232,7 +232,7 @@ export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
       <div>
         <div className="mb-2 flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-            <BookOpen className="h-4 w-4 text-primary" />
+            <Calendar className="h-4 w-4 text-primary" />
           </div>
           <Badge variant="secondary" className="text-xs font-medium">Spring 2027</Badge>
         </div>
