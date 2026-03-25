@@ -1,3 +1,10 @@
+// Lecture-Lab pairings: when a lecture is removed, its paired lab should also be removed
+export const LECTURE_LAB_PAIRS: Record<string, string> = {
+  "ASTR 10003": "ASTR 10001",  // Intro To Astronomy -> Astronomy Lab
+  "ENSC 10003": "ENSC 10001",  // Intro To Environmental Science -> Environmental Science Lab
+  "PHYS 10103": "PHYS 10101",  // Intro To Physics -> Physics Lab
+}
+
 // Course metadata
 export const COURSES = [
   { id: "ANTH 10003", name: "Intro To Anthropology", credits: 3, category: "General Elective", sectionCount: 2, prereqMet: true },

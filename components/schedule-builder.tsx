@@ -10,7 +10,7 @@ import {
   Sun, Moon, CheckCircle, Loader2
 } from "lucide-react"
 import type { Course } from "@/lib/validation"
-import { SECTIONS, COURSES, OPTIMAL_SECTIONS } from "@/lib/course-data"
+import { SECTIONS, COURSES, OPTIMAL_SECTIONS, LECTURE_LAB_PAIRS } from "@/lib/course-data"
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                               */
@@ -65,7 +65,6 @@ function normalizeDays(days: string): string {
 // Build sections from imported data
 const allSections: Section[] = SECTIONS.map(s => {
   const courseInfo = COURSES.find(c => c.id === s.course)
-  const hrs = courseInfo?.credits || 3
   return {
     id: `${s.course}-${s.section}`,
     courseCode: s.course,
@@ -77,12 +76,9 @@ const allSections: Section[] = SECTIONS.map(s => {
     instructor: s.instructor,
     cap: s.cap,
     room: s.location,
-    hrs
+    hrs: courseInfo?.credits || 3
   }
 })
-
-// Debug: log first few sections to verify hrs
-console.log("[v0] Sample allSections:", allSections.slice(0, 5).map(s => ({ id: s.id, hrs: s.hrs })))
 
 /* ------------------------------------------------------------------ */
 /*  Helper Functions                                                    */
@@ -192,7 +188,6 @@ export function ScheduleBuilder({ planned, onRemove, onRemoveCourse, selectedSec
     const result: Record<string, Section> = {}
     Object.entries(externalSelectedSections).forEach(([courseCode, data]) => {
       const section = allSections.find(s => s.id === data.id)
-      console.log("[v0] Converting section:", data.id, "found:", !!section, "hrs:", section?.hrs)
       if (section) {
         result[courseCode] = section
       }
@@ -358,19 +353,32 @@ export function ScheduleBuilder({ planned, onRemove, onRemoveCourse, selectedSec
     
     // If clicking the same section that's already selected, deselect it AND remove from planned
     if (current?.id === section.id) {
-      // Show feedback
-      setRecentlyRemoved(section.courseName)
+      // Check if this course has a paired lab that should also be removed
+      const pairedLabCode = LECTURE_LAB_PAIRS[section.courseCode]
+      const pairedLabName = pairedLabCode ? COURSES.find(c => c.id === pairedLabCode)?.name : null
+      
+      // Show feedback with paired lab info if applicable
+      const removedMessage = pairedLabName 
+        ? `${section.courseName} and ${pairedLabName}`
+        : section.courseName
+      setRecentlyRemoved(removedMessage)
       setTimeout(() => setRecentlyRemoved(null), 3000)
       
-      // Remove from selected sections
+      // Remove from selected sections (including paired lab)
       setSelectedSections(prev => {
         const newSelections = { ...prev }
         delete newSelections[section.courseCode]
+        if (pairedLabCode) {
+          delete newSelections[pairedLabCode]
+        }
         return newSelections
       })
       
       // Also remove from planned courses list (syncs with Quick Check)
       onRemoveCourse(section.courseCode)
+      if (pairedLabCode) {
+        onRemoveCourse(pairedLabCode)
+      }
       return
     }
     
@@ -522,11 +530,7 @@ export function ScheduleBuilder({ planned, onRemove, onRemoveCourse, selectedSec
   }
 
   // Calculate total hours and conflicts
-  const totalHrs = Object.values(selectedSections).reduce((sum, s) => {
-    console.log("[v0] Section hrs:", s.courseCode, s.hrs)
-    return sum + (s.hrs || 0)
-  }, 0)
-  console.log("[v0] Total hours calculated:", totalHrs, "from", Object.keys(selectedSections).length, "sections")
+  const totalHrs = Object.values(selectedSections).reduce((sum, s) => sum + (s.hrs || 0), 0)
   const conflictCount = getConflicts.length
 
   // Calendar grid data
@@ -718,14 +722,31 @@ export function ScheduleBuilder({ planned, onRemove, onRemoveCourse, selectedSec
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      // Remove from selected sections
+                      // Check if this course has a paired lab
+                      const pairedLabCode = LECTURE_LAB_PAIRS[courseCode]
+                      const pairedLabName = pairedLabCode ? COURSES.find(c => c.id === pairedLabCode)?.name : null
+                      
+                      // Show feedback with paired lab info if applicable
+                      const removedMessage = pairedLabName 
+                        ? `${sections[0].courseName} and ${pairedLabName}`
+                        : sections[0].courseName
+                      setRecentlyRemoved(removedMessage)
+                      setTimeout(() => setRecentlyRemoved(null), 3000)
+                      
+                      // Remove from selected sections (including paired lab)
                       setSelectedSections(prev => {
                         const newSelections = { ...prev }
                         delete newSelections[courseCode]
+                        if (pairedLabCode) {
+                          delete newSelections[pairedLabCode]
+                        }
                         return newSelections
                       })
-                      // Remove from planned courses
+                      // Remove from planned courses (including paired lab)
                       onRemoveCourse(courseCode)
+                      if (pairedLabCode) {
+                        onRemoveCourse(pairedLabCode)
+                      }
                     }}
                     className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-500 transition-colors"
                     title="Remove course"
