@@ -206,3 +206,63 @@ export const SELECTED_COURSES = [
   "SEVI 30103", "ECON 31303", "ECON 47403", "FINN 30103",
   "ASTR 10003", "ASTR 10001", "ENSC 10003", "ENSC 10001", "PHYS 10103", "PHYS 10101",
 ];
+
+// Semester availability data for graduation path check
+export const COURSE_AVAILABILITY = [
+  // Economics Major — Required
+  { course: "ECON 43303", name: "Economics of Organizations", offered: "Fall", required: true, prereq: "ECON 30303", prereqMet: false, prereqNote: "In progress Fall 2026" },
+  { course: "ECON 47503", name: "Forecasting", offered: "Fall", required: true, prereq: "ECON 47403 or equivalent", prereqMet: false, prereqNote: "Planned Spring 2027" },
+  { course: "ECON 47603", name: "Economic Analytics", offered: "Fall", required: false, prereq: "ECON 47403 or ISYS 41903", prereqMet: false, prereqNote: "Alternative to 47503. Planned Spring 2027" },
+  
+  // Economics Electives
+  { course: "ECON 46303", name: "International Trade", offered: "Fall and Spring", required: false, prereqMet: true },
+  { course: "ECON 46403", name: "International Macro & Finance", offered: "Fall and Spring", required: false, prereqMet: true },
+  { course: "ECON 38403", name: "Economics of the Developing World", offered: "Fall and Spring", required: false, prereqMet: true },
+  { course: "ECON 44203", name: "Behavioral Economics", offered: "Fall", required: false, prereq: "ECON 30303", prereqMet: false, prereqNote: "In progress Fall 2026" },
+  { course: "ECON 44303", name: "Experimental Economics", offered: "Spring", required: false, prereqMet: true },
+  { course: "ECON 31403", name: "Poverty & Inequality", offered: "Fall", required: false, prereqMet: true },
+  { course: "ECON 38503", name: "Emerging Markets", offered: "Fall", required: false, prereqMet: true },
+  { course: "ECON 33303", name: "Public Economics", offered: "Irregular", required: false, prereqMet: true },
+  { course: "ECON 35303", name: "Labor Economics", offered: "Irregular", required: false, prereqMet: true },
+  { course: "ECON 36303", name: "Economics of Advertising", offered: "Irregular", required: false, prereqMet: true },
+  
+  // Finance Minor — Group A (need 2)
+  { course: "FINN 30503", name: "Financial Markets & Institutions", offered: "Fall, Spring, Summer", required: true, prereqMet: true },
+  { course: "FINN 31003", name: "Financial Modeling", offered: "Fall, Spring, Summer", required: true, prereq: "FINN 20403", prereqMet: true },
+  { course: "FINN 37003", name: "International Finance", offered: "Fall, Spring, Summer", required: true, prereqMet: true },
+
+  // Finance Minor — Group B (need 2)
+  { course: "FINN 30603", name: "Investments", offered: "Fall, Spring, Summer", required: true, prereq: "FINN 30103", prereqMet: false, prereqNote: "Planned Spring 2027" },
+  { course: "FINN 31303", name: "Commercial Banking", offered: "Fall and Spring", required: false, prereq: "FINN 20403", prereqMet: true },
+  { course: "FINN 36003", name: "Corporate Finance", offered: "Fall, Spring, Summer", required: false, prereq: "FINN 30103", prereqMet: false, prereqNote: "Planned Spring 2027" },
+  { course: "FINN 41303", name: "Advanced Investments", offered: "Fall and Spring", required: false, prereq: "FINN 30603", prereqMet: false, prereqNote: "Must take FINN 30603 first" },
+  { course: "FINN 43103", name: "Advanced Commercial Banking", offered: "Spring", required: false, prereq: "FINN 31303", prereqMet: false },
+  { course: "FINN 43203", name: "Derivatives", offered: "Fall", required: false, prereq: "FINN 30603", prereqMet: false, prereqNote: "1-credit add-on" },
+];
+
+// Suggested semester plans for graduation path
+export const SUGGESTED_FALL_2027 = [
+  { course: "ECON 43303", name: "Economics of Organizations", hrs: 3, reason: "Fall only — required for major. No alternative." },
+  { course: "ECON 47503", name: "Forecasting", hrs: 3, reason: "Fall only — required for major. (Or take ECON 47603 instead — also Fall only.)" },
+  { course: "ECON 46303", name: "International Trade", hrs: 3, reason: "Econ elective — offered both semesters, but taking it here balances the load." },
+  { course: "FINN 30603", name: "Investments", hrs: 3, reason: "Finance minor Group B. Prereq FINN 30103 will be met. Also counts as Jr/Sr business elective." },
+];
+
+export const SUGGESTED_SPRING_2028 = [
+  { course: "FINN 37003", name: "International Finance", hrs: 3, reason: "Finance minor Group A. Offered both semesters — Spring works." },
+  { course: "FINN 30503", name: "Financial Markets & Institutions", hrs: 3, reason: "Finance minor Group A. Offered both semesters. Also counts as Jr/Sr business elective." },
+  { course: "FINN 36003", name: "Corporate Finance", hrs: 3, reason: "Finance minor Group B. Prereq FINN 30103 met. Also Jr/Sr elective." },
+  { course: "GEN ELEC", name: "General Elective", hrs: 3, reason: "Any 3-hr course. Light final semester — focus on senior capstone work." },
+];
+
+// ECON elective options table
+export const ECON_ELECTIVE_OPTIONS = [
+  { course: "ECON 46303", name: "International Trade", offered: "Fall and Spring", prereqMet: true, notes: "Recommended — flexible timing" },
+  { course: "ECON 46403", name: "International Macro & Finance", offered: "Fall and Spring", prereqMet: true, notes: "Good alternative" },
+  { course: "ECON 38403", name: "Econ of Developing World", offered: "Fall and Spring", prereqMet: true, notes: "" },
+  { course: "ECON 44203", name: "Behavioral Economics", offered: "Fall only", prereqMet: true, notes: "Would add to Fall 2027 load" },
+  { course: "ECON 44303", name: "Experimental Economics", offered: "Spring only", prereqMet: true, notes: "Spring option if preferred" },
+  { course: "ECON 31403", name: "Poverty & Inequality", offered: "Fall only", prereqMet: true, notes: "Would add to Fall 2027 load" },
+  { course: "ECON 33303", name: "Public Finance", offered: "Irregular", prereqMet: true, notes: "May not be offered — risky to plan around" },
+  { course: "ECON 35303", name: "Labor Economics", offered: "Irregular", prereqMet: true, notes: "May not be offered — risky to plan around" },
+];

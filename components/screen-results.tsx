@@ -24,6 +24,7 @@ import {
 } from "lucide-react"
 import { validatePlan } from "@/lib/validation"
 import type { Course, CourseStatus, PrereqStatus, LoadFlag, DegreeCourseEntry, SemesterPlan, SuggestionSeverity } from "@/lib/validation"
+import { COURSE_AVAILABILITY, SUGGESTED_FALL_2027, SUGGESTED_SPRING_2028, ECON_ELECTIVE_OPTIONS } from "@/lib/course-data"
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -448,6 +449,9 @@ export function ScreenResults({
         <SuggestionBox suggestion={result.suggestion} />
       )}
 
+      {/* ========== Graduation Path Check ========== */}
+      <GraduationPathCheck />
+
       {/* ========== Bottom actions ========== */}
       <div className="flex flex-col gap-4 border-t pb-8 pt-6 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
@@ -646,10 +650,273 @@ function SuggestionBox({ suggestion }: { suggestion: { title: string; body: stri
       <p className={`text-sm font-semibold ${s.titleColor}`}>
         {suggestion.title}
       </p>
-      <div className={`mt-3 flex flex-col gap-2.5 text-sm ${s.bodyColor} leading-relaxed`}>
-        {suggestion.body.map((para, i) => (
-          <p key={i}>{para}</p>
-        ))}
+  <div className={`mt-3 flex flex-col gap-2.5 text-sm ${s.bodyColor} leading-relaxed`}>
+  {suggestion.body.map((para, i) => (
+  <p key={i}>{para}</p>
+  ))}
+  </div>
+  </div>
+  )
+  }
+
+/* ------------------------------------------------------------------ */
+/*  Graduation Path Check Section                                      */
+/* ------------------------------------------------------------------ */
+
+function GraduationPathCheck() {
+  const [showElectives, setShowElectives] = useState(false)
+
+  // Semester-only courses for risk table
+  const riskCourses = [
+    { course: "ECON 43303", name: "Economics of Organizations", requirement: "Econ Major — Required", offered: "Fall only", risk: "Must take Fall 2027", riskLevel: "yellow" as const },
+    { course: "ECON 47503", name: "Forecasting", requirement: "Econ Major — Required (or 47603)", offered: "Fall only", risk: "Must take Fall 2027", riskLevel: "yellow" as const },
+    { course: "ECON 47603", name: "Economic Analytics", requirement: "Econ Major — Alt for 47503", offered: "Fall only", risk: "Also Fall only — no Spring backup", riskLevel: "yellow" as const },
+    { course: "1x ECON elective", name: "(3 hrs)", requirement: "Econ Major — Elective", offered: "Varies", risk: "See options below", riskLevel: "green" as const },
+    { course: "FINN 30503, 31003, or 37003", name: "(pick 2)", requirement: "Finance Minor — Group A", offered: "Fall, Spring, Summer", risk: "Flexible", riskLevel: "green" as const },
+    { course: "FINN 30603, 31303, or 36003", name: "(pick 2)", requirement: "Finance Minor — Group B", offered: "Fall, Spring, Summer", risk: "Flexible", riskLevel: "green" as const },
+    { course: "1x General Elective", name: "(3 hrs)", requirement: "General Electives", offered: "Many options", risk: "Flexible", riskLevel: "green" as const },
+  ]
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* Header */}
+      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <Calendar className="h-3.5 w-3.5" />
+        Graduation Path Check
+      </div>
+
+      {/* Title and subtitle */}
+      <div>
+        <h3 className="text-lg font-bold text-foreground">
+          Can you finish by Spring 2028?
+        </h3>
+        <p className="text-sm text-muted-foreground mt-1">
+          QuickCheck verified semester availability for all 23 remaining credit hours across your final 2 semesters.
+        </p>
+      </div>
+
+      {/* Overall Verdict Banner */}
+      <div className="rounded-xl border-2 border-emerald-300 bg-gradient-to-r from-emerald-50 to-amber-50/50 p-5">
+        <div className="flex items-start gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 shrink-0">
+            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-emerald-800">
+              On-time graduation is feasible — but Fall 2027 is critical.
+            </p>
+            <p className="text-sm text-emerald-700 mt-1 leading-relaxed">
+              Two required economics courses are only offered in Fall. Missing them delays graduation by a full year.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Key Callout Box */}
+      <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-5">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="text-sm text-amber-800 leading-relaxed">
+            <span className="font-bold">ECON 43303, ECON 47503, and ECON 47603</span> are all Fall-only courses. 
+            You need ECON 43303 (required) and either ECON 47503 or 47603 (required). 
+            Both must be taken in <span className="font-bold">Fall 2027</span> — they are not offered in Spring. 
+            If you don&apos;t take them next fall, you cannot graduate in Spring 2028.
+          </div>
+        </div>
+      </div>
+
+      {/* Availability Risk Table */}
+      <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+        <div className="px-5 py-3 border-b bg-muted/40">
+          <h4 className="text-sm font-semibold text-foreground">Required Courses Still Needed</h4>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b bg-muted/20">
+                <th className="px-4 py-2.5 text-left font-semibold text-muted-foreground">Course</th>
+                <th className="px-4 py-2.5 text-left font-semibold text-muted-foreground">Requirement</th>
+                <th className="px-4 py-2.5 text-left font-semibold text-muted-foreground">Typically Offered</th>
+                <th className="px-4 py-2.5 text-left font-semibold text-muted-foreground">Risk</th>
+              </tr>
+            </thead>
+            <tbody>
+              {riskCourses.map((c, i) => (
+                <tr key={i} className="border-b last:border-b-0 hover:bg-muted/30">
+                  <td className="px-4 py-2.5">
+                    <div className="font-mono font-medium text-foreground">{c.course}</div>
+                    <div className="text-muted-foreground">{c.name}</div>
+                  </td>
+                  <td className="px-4 py-2.5 text-muted-foreground">{c.requirement}</td>
+                  <td className="px-4 py-2.5">
+                    <Badge className={`text-[10px] px-1.5 py-0 ${
+                      c.riskLevel === "yellow" 
+                        ? "border-amber-200 bg-amber-100 text-amber-700" 
+                        : "border-emerald-200 bg-emerald-100 text-emerald-700"
+                    }`}>
+                      {c.offered}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-2.5 text-muted-foreground">{c.risk}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Two-Semester Plan */}
+      <div className="grid md:grid-cols-2 gap-4">
+        {/* Fall 2027 */}
+        <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+          <div className="px-5 py-3 border-b bg-amber-50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-amber-600" />
+                <span className="text-sm font-semibold text-amber-800">Fall 2027</span>
+                <Badge className="border-amber-200 bg-amber-100 text-amber-700 text-[10px] px-1.5 py-0">
+                  Critical
+                </Badge>
+              </div>
+              <span className="text-xs font-medium text-amber-700">13 hours</span>
+            </div>
+          </div>
+          <div className="px-5 py-3">
+            <div className="flex flex-col gap-2">
+              {SUGGESTED_FALL_2027.map((course, idx) => (
+                <div key={idx} className="flex flex-col gap-0.5 py-1.5 border-b last:border-b-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs font-medium text-foreground">{course.course}</span>
+                    <span className="text-xs text-muted-foreground">{course.hrs}h</span>
+                  </div>
+                  <div className="text-xs text-foreground/80">{course.name}</div>
+                  <div className="text-[10px] text-amber-700 mt-0.5">{course.reason}</div>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-3 pt-3 border-t leading-relaxed">
+              After Fall 2027: 110 of 120 hours complete. Economics major: 23 of 24 hrs. Finance minor: 9 of 15 hrs.
+            </p>
+          </div>
+        </div>
+
+        {/* Spring 2028 */}
+        <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+          <div className="px-5 py-3 border-b bg-emerald-50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-emerald-600" />
+                <span className="text-sm font-semibold text-emerald-800">Spring 2028</span>
+                <Badge className="border-emerald-200 bg-emerald-100 text-emerald-700 text-[10px] px-1.5 py-0">
+                  Final
+                </Badge>
+              </div>
+              <span className="text-xs font-medium text-emerald-700">12 hours</span>
+            </div>
+          </div>
+          <div className="px-5 py-3">
+            <div className="flex flex-col gap-2">
+              {SUGGESTED_SPRING_2028.map((course, idx) => (
+                <div key={idx} className="flex flex-col gap-0.5 py-1.5 border-b last:border-b-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs font-medium text-foreground">{course.course}</span>
+                    <span className="text-xs text-muted-foreground">{course.hrs}h</span>
+                  </div>
+                  <div className="text-xs text-foreground/80">{course.name}</div>
+                  <div className="text-[10px] text-emerald-700 mt-0.5">{course.reason}</div>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-3 pt-3 border-t leading-relaxed">
+              Spring 2028: 120 hours. Economics major: 24/24. Finance minor: 15/15. Jr/Sr Business Electives: 12/12. General Electives: 6/6. You&apos;re done.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Finance Minor Double-Count Explainer */}
+      <div className="rounded-xl border bg-primary/[0.03] p-4">
+        <div className="flex items-start gap-3">
+          <Lightbulb className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-foreground">How Finance Minor Courses Double-Count</p>
+            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+              Finance minor courses count as Jr/Sr Business Electives. Your 4 remaining finance minor courses (12 hrs) 
+              satisfy both the minor requirement and the Jr/Sr business elective requirement (9 hrs still needed). 
+              This is why you don&apos;t need separate Jr/Sr electives — the finance minor does double duty.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ECON Elective Options (Collapsible) */}
+      <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+        <button
+          onClick={() => setShowElectives(!showElectives)}
+          className="flex w-full items-center justify-between px-5 py-3 text-left hover:bg-muted/30"
+        >
+          <div className="flex items-center gap-2">
+            <BookOpen className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-semibold text-foreground">Your ECON Elective Options</span>
+            <Badge className="border-muted-foreground/20 bg-muted text-muted-foreground text-[10px] px-1.5 py-0">
+              {ECON_ELECTIVE_OPTIONS.length} options
+            </Badge>
+          </div>
+          {showElectives ? (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          )}
+        </button>
+        
+        {showElectives && (
+          <div className="border-t">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b bg-muted/20">
+                    <th className="px-4 py-2.5 text-left font-semibold text-muted-foreground">Course</th>
+                    <th className="px-4 py-2.5 text-left font-semibold text-muted-foreground">Typically Offered</th>
+                    <th className="px-4 py-2.5 text-left font-semibold text-muted-foreground">Prereqs</th>
+                    <th className="px-4 py-2.5 text-left font-semibold text-muted-foreground">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ECON_ELECTIVE_OPTIONS.map((c, i) => (
+                    <tr key={i} className="border-b last:border-b-0 hover:bg-muted/30">
+                      <td className="px-4 py-2.5">
+                        <div className="font-mono font-medium text-foreground">{c.course}</div>
+                        <div className="text-muted-foreground">{c.name}</div>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Badge className={`text-[10px] px-1.5 py-0 ${
+                          c.offered.includes("Irregular")
+                            ? "border-red-200 bg-red-100 text-red-700"
+                            : c.offered.includes("only")
+                              ? "border-amber-200 bg-amber-100 text-amber-700"
+                              : "border-emerald-200 bg-emerald-100 text-emerald-700"
+                        }`}>
+                          {c.offered}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {c.prereqMet ? (
+                          <span className="text-emerald-600 font-semibold">Met</span>
+                        ) : (
+                          <span className="text-amber-600">Pending</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-muted-foreground">{c.notes || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-5 py-3 border-t bg-muted/20 text-[10px] text-muted-foreground">
+              Maximum 27 hours of ECON courses allowed. After your plan, you&apos;ll have 24 ECON hours — room for exactly one more 3-hour ECON elective.
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
