@@ -816,198 +816,153 @@ export function ScheduleBuilder({ planned, onRemove, onRemoveCourse, selectedSec
             
             {/* Time Grid */}
             <div className="relative">
+              {/* Hour rows - just the background grid */}
               {hours.map(hour => (
                 <div key={hour} className="grid grid-cols-[50px_repeat(5,1fr)] h-12 border-b">
                   <div className="p-1 text-[9px] text-muted-foreground text-right pr-2">
                     {hour > 12 ? `${hour - 12}PM` : hour === 12 ? "12PM" : `${hour}AM`}
                   </div>
                   {days.map(day => {
-                    // Check if this cell is part of the new block being created
                     const isInNewBlock = isAddingBlock && newBlockStart && newBlockEnd && 
                       newBlockStart.day === day && 
                       hour >= newBlockStart.hour && 
                       hour < newBlockEnd.hour
                     
+                    const morningPref = preferences.find(p => p.id === "morning")?.enabled
+                    const afternoonPref = preferences.find(p => p.id === "afternoon")?.enabled
+                    const hourStart = hour * 60
+                    const hourEnd = (hour + 1) * 60
+                    const isPreferred = (morningPref && hourStart >= 480 && hourEnd <= 720) ||
+                                       (afternoonPref && hourStart >= 720 && hourEnd <= 1080)
+                    
                     return (
-                    <div 
-                      key={day} 
-                      className={`border-l relative ${isAddingBlock ? "cursor-crosshair" : ""} ${isInNewBlock ? "bg-amber-100" : ""}`}
-                      onClick={() => handleCalendarClick(day, hour)}
-                      onMouseEnter={(e) => {
-                        if (e.buttons === 1) handleCalendarDrag(day, hour)
-                      }}
-                    >
-                      {/* New block preview */}
-                      {isInNewBlock && hour === newBlockStart.hour && (
-                        <div className="absolute inset-x-0 bg-amber-200 border-2 border-amber-400 border-dashed z-10 pointer-events-none"
-                          style={{
-                            top: 0,
-                            height: `${(newBlockEnd.hour - newBlockStart.hour) * 48}px`
-                          }}
-                        >
-                          <span className="text-[9px] font-semibold text-amber-700 px-1">
-                            {formatHour(newBlockStart.hour)} - {formatHour(newBlockEnd.hour)}
-                          </span>
-                        </div>
-                      )}
-                      
-                      {/* Constraint blocks (RED - blocked times) */}
-                      {timeBlocks.map(block => {
-                        if (!block.days.includes(day)) return null
-                        const blockStart = parseTime(block.startTime)
-                        const blockEnd = parseTime(block.endTime)
-                        const hourStart = hour * 60
-                        const hourEnd = (hour + 1) * 60
-                        if (!timeOverlaps(blockStart, blockEnd, hourStart, hourEnd)) return null
-                        
-                        const top = Math.max(0, (blockStart - hourStart) / 60 * 48)
-                        const bottom = Math.min(48, (blockEnd - hourStart) / 60 * 48)
-                        const height = bottom - top
-                        
-                        return (
-                          <div
-                            key={block.id}
-                            className="absolute inset-x-0 bg-red-100 border border-red-300"
-                            style={{
-                              top: `${top}px`,
-                              height: `${height}px`,
-                              backgroundImage: "repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(220,38,38,0.15) 3px, rgba(220,38,38,0.15) 6px)"
-                            }}
-                          >
-                            {blockStart >= hourStart && blockStart < hourEnd && (
-                              <span className="text-[8px] font-semibold text-red-700 px-1 truncate block">
-                                {block.label}
-                              </span>
-                            )}
-                          </div>
-                        )
-                      })}
-                      
-                      {/* Preferred time blocks (GREEN - based on preferences) */}
-                      {(() => {
-                        const morningPref = preferences.find(p => p.id === "morning")?.enabled
-                        const afternoonPref = preferences.find(p => p.id === "afternoon")?.enabled
-                        const hourStart = hour * 60
-                        const hourEnd = (hour + 1) * 60
-                        
-                        // Morning preference: 8 AM - 12 PM (480-720 mins)
-                        if (morningPref && hourStart >= 480 && hourEnd <= 720) {
-                          // Check if there's a blocked time in this slot
-                          const hasBlock = timeBlocks.some(block => 
-                            block.days.includes(day) && 
-                            timeOverlaps(parseTime(block.startTime), parseTime(block.endTime), hourStart, hourEnd)
-                          )
-                          if (!hasBlock) {
-                            return (
-                              <div
-                                className="absolute inset-0 bg-emerald-50 border-l border-r border-emerald-100 pointer-events-none"
-                                style={{ opacity: 0.7 }}
-                              />
-                            )
-                          }
-                        }
-                        
-                        // Afternoon preference: 12 PM - 6 PM (720-1080 mins)
-                        if (afternoonPref && hourStart >= 720 && hourEnd <= 1080) {
-                          const hasBlock = timeBlocks.some(block => 
-                            block.days.includes(day) && 
-                            timeOverlaps(parseTime(block.startTime), parseTime(block.endTime), hourStart, hourEnd)
-                          )
-                          if (!hasBlock) {
-                            return (
-                              <div
-                                className="absolute inset-0 bg-emerald-50 border-l border-r border-emerald-100 pointer-events-none"
-                                style={{ opacity: 0.7 }}
-                              />
-                            )
-                          }
-                        }
-                        
-                        return null
-                      })()}
-                      
-                      {/* Course blocks */}
-                      {Object.values(selectedSections).map(section => {
-                        const sectionDays = getDaysArray(section.days)
-                        if (!sectionDays.includes(day)) return null
-                        
-                        const sectionStart = parseTime(section.startTime)
-                        const sectionEnd = parseTime(section.endTime)
-                        const hourStart = hour * 60
-                        const hourEnd = (hour + 1) * 60
-                        if (!timeOverlaps(sectionStart, sectionEnd, hourStart, hourEnd)) return null
-                        
-                        const top = Math.max(0, (sectionStart - hourStart) / 60 * 48)
-                        const bottom = Math.min(48, (sectionEnd - hourStart) / 60 * 48)
-                        const height = bottom - top
-                        
-                        // Check if this section has any conflicts and get conflict details
-                        const sectionConflicts = getConflicts.filter(c => c.sectionId === section.id)
-                        const hasConflict = sectionConflicts.length > 0
-                        const conflictTooltip = hasConflict 
-                          ? sectionConflicts.map(c => c.reason).join("\n")
-                          : undefined
-                        const colorClass = hasConflict 
-                          ? "bg-red-100 border-red-400 ring-2 ring-red-400/50" 
-                          : getCourseColor(section.courseCode)
-                        
-                        const blockContent = (
-                          <div
-                            className={`absolute inset-x-0.5 rounded border ${colorClass} ${hasConflict ? "z-20 cursor-help" : ""} overflow-hidden`}
-                            style={{
-                              top: `${top}px`,
-                              height: `${height}px`,
-                            }}
-                          >
-                            {sectionStart >= hourStart && sectionStart < hourEnd && (
-                              <div className={`p-0.5 text-[8px] leading-tight ${hasConflict ? "text-red-800" : ""} h-full`}>
-                                <div className="font-bold truncate flex items-center gap-0.5">
-                                  {hasConflict && <AlertTriangle className="h-2.5 w-2.5 text-red-600 flex-shrink-0" />}
-                                  {section.courseName}
-                                </div>
-                                <div className="truncate opacity-75">{section.section} · {section.instructor}</div>
-                                {hasConflict && (
-                                  <div className="text-red-600 font-semibold">CONFLICT</div>
-                                )}
-                                {!hasConflict && section.cap < 40 && (
-                                  <div className="text-amber-700">Cap: {section.cap}</div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )
-                        
-                        // Wrap conflicting blocks in tooltip
-                        if (hasConflict) {
-                          return (
-                            <Tooltip key={section.id}>
-                              <TooltipTrigger asChild>
-                                {blockContent}
-                              </TooltipTrigger>
-                              <TooltipContent 
-                                side="right" 
-                                className="bg-red-700 text-white border-red-800 max-w-[250px]"
-                                sideOffset={5}
-                              >
-                                <div className="font-bold mb-1 flex items-center gap-1.5">
-                                  <AlertTriangle className="h-3.5 w-3.5" />
-                                  Schedule Conflict
-                                </div>
-                                {sectionConflicts.map((c, i) => (
-                                  <div key={i} className="text-red-100">{c.reason}</div>
-                                ))}
-                              </TooltipContent>
-                            </Tooltip>
-                          )
-                        }
-                        
-                        return <div key={section.id}>{blockContent}</div>
-                      })}
-                    </div>
+                      <div 
+                        key={day} 
+                        className={`border-l relative ${isAddingBlock ? "cursor-crosshair" : ""} ${isInNewBlock ? "bg-amber-100" : isPreferred ? "bg-emerald-50/70" : ""}`}
+                        onClick={() => handleCalendarClick(day, hour)}
+                        onMouseEnter={(e) => {
+                          if (e.buttons === 1) handleCalendarDrag(day, hour)
+                        }}
+                      />
                     )
                   })}
                 </div>
               ))}
+              
+              {/* Overlay layer for course blocks - positioned absolutely */}
+              <div className="absolute inset-0 grid grid-cols-[50px_repeat(5,1fr)] pointer-events-none">
+                <div /> {/* Time label column spacer */}
+                {days.map((day, dayIndex) => (
+                  <div key={day} className="relative border-l">
+                    {/* New block preview */}
+                    {isAddingBlock && newBlockStart && newBlockEnd && newBlockStart.day === day && (
+                      <div 
+                        className="absolute inset-x-1 bg-amber-200 border-2 border-amber-400 border-dashed z-10 rounded pointer-events-auto"
+                        style={{
+                          top: `${(newBlockStart.hour - 8) * 48}px`,
+                          height: `${(newBlockEnd.hour - newBlockStart.hour) * 48}px`
+                        }}
+                      >
+                        <span className="text-[9px] font-semibold text-amber-700 px-1">
+                          {formatHour(newBlockStart.hour)} - {formatHour(newBlockEnd.hour)}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Constraint blocks (RED - blocked times) */}
+                    {timeBlocks.map(block => {
+                      if (!block.days.includes(day)) return null
+                      const blockStart = parseTime(block.startTime)
+                      const blockEnd = parseTime(block.endTime)
+                      const topPx = ((blockStart / 60) - 8) * 48
+                      const heightPx = ((blockEnd - blockStart) / 60) * 48
+                      
+                      return (
+                        <div
+                          key={block.id}
+                          className="absolute inset-x-1 bg-red-100 border border-red-300 rounded pointer-events-auto"
+                          style={{
+                            top: `${topPx}px`,
+                            height: `${heightPx}px`,
+                            backgroundImage: "repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(220,38,38,0.15) 3px, rgba(220,38,38,0.15) 6px)"
+                          }}
+                        >
+                          <div className="p-1 text-[9px] font-semibold text-red-700">
+                            {block.label}
+                          </div>
+                        </div>
+                      )
+                    })}
+                    
+                    {/* Course blocks */}
+                    {Object.values(selectedSections).map(section => {
+                      const sectionDays = getDaysArray(section.days)
+                      if (!sectionDays.includes(day)) return null
+                      
+                      const sectionStart = parseTime(section.startTime)
+                      const sectionEnd = parseTime(section.endTime)
+                      const topPx = ((sectionStart / 60) - 8) * 48
+                      const heightPx = ((sectionEnd - sectionStart) / 60) * 48
+                      
+                      const sectionConflicts = getConflicts.filter(c => c.sectionId === section.id)
+                      const hasConflict = sectionConflicts.length > 0
+                      const colorClass = hasConflict 
+                        ? "bg-red-100 border-red-400 ring-2 ring-red-400/50" 
+                        : getCourseColor(section.courseCode)
+                      
+                      const blockContent = (
+                        <div
+                          className={`absolute inset-x-1 rounded border ${colorClass} ${hasConflict ? "z-20 cursor-help" : "z-10"} pointer-events-auto overflow-hidden`}
+                          style={{
+                            top: `${topPx}px`,
+                            height: `${heightPx}px`,
+                          }}
+                          onClick={() => selectSection(section)}
+                        >
+                          <div className={`p-1.5 text-[9px] leading-tight ${hasConflict ? "text-red-800" : ""} h-full flex flex-col`}>
+                            <div className="font-bold flex items-center gap-1">
+                              {hasConflict && <AlertTriangle className="h-3 w-3 text-red-600 flex-shrink-0" />}
+                              <span className="font-mono">{section.courseCode}</span>
+                            </div>
+                            <div className="font-medium">{section.courseName}</div>
+                            <div className="opacity-80">Section {section.section.replace('-', '')}</div>
+                            <div className="opacity-80">{section.startTime} - {section.endTime}</div>
+                            <div className="opacity-70">{section.instructor}</div>
+                            {hasConflict && (
+                              <div className="text-red-600 font-bold mt-auto">CONFLICT</div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                      
+                      if (hasConflict) {
+                        return (
+                          <Tooltip key={`${section.id}-${day}`}>
+                            <TooltipTrigger asChild>
+                              {blockContent}
+                            </TooltipTrigger>
+                            <TooltipContent 
+                              side="right" 
+                              className="bg-red-700 text-white border-red-800 max-w-[250px]"
+                              sideOffset={5}
+                            >
+                              <div className="font-bold mb-1 flex items-center gap-1.5">
+                                <AlertTriangle className="h-3.5 w-3.5" />
+                                Schedule Conflict
+                              </div>
+                              {sectionConflicts.map((c, i) => (
+                                <div key={i} className="text-red-100">{c.reason}</div>
+                              ))}
+                            </TooltipContent>
+                          </Tooltip>
+                        )
+                      }
+                      
+                      return <div key={`${section.id}-${day}`}>{blockContent}</div>
+                    })}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
