@@ -5,12 +5,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import {
-  Search, X, CheckCircle, BookOpen, Plus, ArrowRightLeft,
+  Search, X, CheckCircle, Calendar, Plus, ArrowRightLeft,
   Lightbulb, ChevronDown, ChevronUp, AlertTriangle, Lock, Sparkles,
 } from "lucide-react"
 import type { Course } from "@/lib/validation"
 import { buildRecommendations } from "@/lib/validation"
 import type { RequirementGroup, RecommendedCourse, SciencePair } from "@/lib/validation"
+import { ScheduleBuilder } from "@/components/schedule-builder"
 
 /* ------------------------------------------------------------------ */
 /*  Full course catalogue for free-search mode                         */
@@ -91,18 +92,27 @@ const scienceLinks: Record<string, string> = {
 /*  Props                                                               */
 /* ------------------------------------------------------------------ */
 
+// Type for selected sections (course code -> section data)
+interface SelectedSectionData {
+  id: string
+  courseCode: string
+  section: string
+}
+
 interface Props {
   planned: Course[]
   setPlanned: React.Dispatch<React.SetStateAction<Course[]>>
   onRunCheck: () => void
+  selectedSections: Record<string, SelectedSectionData>
+  setSelectedSections: React.Dispatch<React.SetStateAction<Record<string, SelectedSectionData>>>
 }
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                           */
 /* ------------------------------------------------------------------ */
 
-export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
-  const [mode, setMode] = useState<"choose" | "guided">("choose")
+export function ScreenPlan({ planned, setPlanned, onRunCheck, selectedSections, setSelectedSections }: Props) {
+  const [mode, setMode] = useState<"choose" | "guided" | "schedule">("choose")
   const [query, setQuery] = useState("")
   const [showResults, setShowResults] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
@@ -226,12 +236,12 @@ export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
   }, [analyzing, onRunCheck])
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-6 py-10">
+    <div className={`mx-auto flex w-full flex-1 flex-col gap-6 px-6 py-10 ${mode === "schedule" ? "max-w-7xl" : "max-w-2xl"}`}>
       {/* Header */}
       <div>
         <div className="mb-2 flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-            <BookOpen className="h-4 w-4 text-primary" />
+            <Calendar className="h-4 w-4 text-primary" />
           </div>
           <Badge variant="secondary" className="text-xs font-medium">Spring 2027</Badge>
         </div>
@@ -266,6 +276,17 @@ export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
         >
           <Lightbulb className="h-3.5 w-3.5" />
           What Should I Take?
+        </button>
+        <button
+          onClick={() => setMode("schedule")}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all ${
+            mode === "schedule"
+              ? "bg-card text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <Calendar className="h-3.5 w-3.5" />
+          Your Schedule
         </button>
       </div>
 
@@ -306,6 +327,44 @@ export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
               </div>
             )}
           </div>
+
+          {/* Selected courses list */}
+          {planned.length > 0 && (
+            <div className="rounded-xl border bg-card p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Selected Courses
+                </p>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="text-xs font-semibold">{planned.length} courses</Badge>
+                  <Badge className="border-primary/20 bg-primary/10 text-xs font-semibold text-primary">{totalHrs} credit hours</Badge>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                {planned.map((c) => (
+                  <div
+                    key={c.code}
+                    className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="shrink-0 font-mono text-[10px]">{c.code}</Badge>
+                      <span className="text-xs font-medium text-foreground">{c.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground">{c.hrs} hrs</span>
+                      <button
+                        onClick={() => removeCourse(c.code)}
+                        className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500"
+                        aria-label={`Remove ${c.code}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -330,62 +389,59 @@ export function ScreenPlan({ planned, setPlanned, onRunCheck }: Props) {
               onRemove={removeCourse}
             />
           ))}
+
+          {/* Selected courses list */}
+          {planned.length > 0 && (
+            <div className="rounded-xl border bg-card p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Selected Courses
+                </p>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="text-xs font-semibold">{planned.length} courses</Badge>
+                  <Badge className="border-primary/20 bg-primary/10 text-xs font-semibold text-primary">{totalHrs} credit hours</Badge>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                {planned.map((c) => (
+                  <div
+                    key={c.code}
+                    className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="shrink-0 font-mono text-[10px]">{c.code}</Badge>
+                      <span className="text-xs font-medium text-foreground">{c.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground">{c.hrs} hrs</span>
+                      <button
+                        onClick={() => removeCourse(c.code)}
+                        className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500"
+                        aria-label={`Remove ${c.code}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* ============================================================ */}
-      {/*  Planned courses list (always visible in both modes)          */}
+      {/*  MODE C: "Your Schedule" - Build weekly schedule              */}
       {/* ============================================================ */}
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Your Schedule
-          </p>
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary" className="text-xs font-semibold">{planned.length} courses</Badge>
-            <Badge className="border-primary/20 bg-primary/10 text-xs font-semibold text-primary">{totalHrs} credit hours</Badge>
-          </div>
-        </div>
-
-        {planned.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed bg-muted/30 px-6 py-10 text-center">
-            <ArrowRightLeft className="h-6 w-6 text-muted-foreground" />
-            <p className="text-sm font-medium text-muted-foreground">No courses planned yet</p>
-            <p className="text-xs text-muted-foreground">
-              {mode === "choose"
-                ? "Use the search above to add courses"
-                : "Select courses from the recommendations above"}
-            </p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {planned.map((c) => (
-              <div
-                key={c.code}
-                className="flex items-center justify-between rounded-xl border bg-card px-4 py-3.5 shadow-sm transition-all hover:shadow-md"
-              >
-                <div className="flex items-center gap-3">
-                  <Badge variant="secondary" className="shrink-0 font-mono text-xs">{c.code}</Badge>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium text-foreground">{c.name}</span>
-                    <span className="text-[11px] text-muted-foreground">{c.cat}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-medium text-muted-foreground">{c.hrs} hrs</span>
-                  <button
-                    onClick={() => removeCourse(c.code)}
-                    className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500"
-                    aria-label={`Remove ${c.code}`}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {mode === "schedule" && (
+        <ScheduleBuilder 
+          planned={planned} 
+          onRemove={removeCourse} 
+          onRemoveCourse={removeCourse}
+          selectedSections={selectedSections}
+          setSelectedSections={setSelectedSections}
+        />
+      )}
 
       {/* Run button / analysis animation */}
       {analyzing ? (
@@ -432,7 +488,7 @@ function RequirementGroupCard({
   onRemove: (code: string) => void
 }) {
   const [expanded, setExpanded] = useState(
-    group.id === "business-core" || group.id === "econ-major-required" || group.id === "finance-minor"
+    group.id === "business-core" || group.id === "econ-major-required" || group.id === "finance-minor" || group.id === "state-min-core"
   )
 
   const plannedInGroup = group.courses.filter(c => plannedCodes.has(c.code)).length
@@ -496,60 +552,66 @@ function RequirementGroupCard({
           {/* ======================================================== */}
           {/* SCIENCE PAIRS - auto-linked lecture+lab buttons            */}
           {/* ======================================================== */}
-          {isScience && group.sciencePairs!.map((pair) => {
-            const pairAdded = plannedCodes.has(pair.lecture.code) && plannedCodes.has(pair.lab.code)
-            return (
-              <div
-                key={pair.lecture.code}
-                className={`relative flex flex-col gap-2 rounded-lg border-2 px-4 py-3.5 text-left transition-all ${
-                  pairAdded
-                    ? "border-emerald-300 bg-emerald-50"
-                    : pair.lecture.priority === "recommended"
-                      ? "border-primary/20 bg-primary/[0.03] cursor-pointer hover:border-primary/40 hover:bg-primary/[0.06]"
-                      : "border-border bg-muted/20 cursor-pointer hover:border-muted-foreground/20 hover:bg-muted/40"
-                }`}
-                onClick={() => { if (!pairAdded) onAddPair(pair.lecture, pair.lab) }}
-                role="button"
-                tabIndex={0}
-              >
-                {pairAdded && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onRemove(pair.lecture.code) }}
-                    className="absolute right-2.5 top-2.5 rounded-full p-1 text-emerald-500 transition-colors hover:bg-emerald-100 hover:text-emerald-700"
-                    aria-label={`Remove ${pair.lecture.code} and ${pair.lab.code}`}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-                <div className="flex items-center gap-2 pr-6">
-                  {pairAdded ? (
-                    <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600" />
-                  ) : (
-                    <Plus className="h-4 w-4 shrink-0 text-primary" />
-                  )}
-                  <div className="flex flex-1 flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className={`text-sm font-semibold ${pairAdded ? "text-emerald-800" : "text-foreground"}`}>{pair.lecture.code}</span>
-                    <span className={`text-sm ${pairAdded ? "text-emerald-700" : "text-foreground"}`}>{pair.lecture.name}</span>
-                    <span className="text-[10px] text-muted-foreground">+</span>
-                    <span className={`text-sm font-semibold ${pairAdded ? "text-emerald-800" : "text-foreground"}`}>{pair.lab.code}</span>
-                    <span className={`text-sm ${pairAdded ? "text-emerald-700" : "text-foreground"}`}>{pair.lab.name}</span>
-                  </div>
-                  <Badge
-                    className={`shrink-0 text-[10px] font-bold ${
-                      pairAdded
-                        ? "border-emerald-300 bg-emerald-100 text-emerald-700"
-                        : "border-primary/20 bg-primary/10 text-primary"
-                    }`}
-                  >
-                    {pair.lecture.hrs + pair.lab.hrs} hrs
-                  </Badge>
-                </div>
-                <p className={`pl-6 text-[11px] leading-relaxed ${pairAdded ? "text-emerald-600" : "text-muted-foreground"}`}>
-                  {pairAdded ? "Added to your schedule (lecture + lab)" : pair.lecture.note}
-                </p>
+          {isScience && (
+            <>
+              <div className="flex items-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-[11px] text-amber-700 border border-amber-200">
+                <Sparkles className="h-3 w-3 shrink-0 text-amber-500" />
+                <span>All three options are on your 8-semester plan — choose one that fits your interests</span>
               </div>
-            )
-          })}
+              {group.sciencePairs!.map((pair) => {
+                const pairAdded = plannedCodes.has(pair.lecture.code) && plannedCodes.has(pair.lab.code)
+                return (
+                  <div
+                    key={pair.lecture.code}
+                    className={`relative flex flex-col gap-2 rounded-lg border-2 px-4 py-3.5 text-left transition-all ${
+                      pairAdded
+                        ? "border-emerald-300 bg-emerald-50"
+                        : "border-amber-200 bg-amber-50/50 cursor-pointer hover:border-amber-300 hover:bg-amber-50"
+                    }`}
+                    onClick={() => { if (!pairAdded) onAddPair(pair.lecture, pair.lab) }}
+                    role="button"
+                    tabIndex={0}
+                  >
+                    {pairAdded && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onRemove(pair.lecture.code) }}
+                        className="absolute right-2.5 top-2.5 rounded-full p-1 text-emerald-500 transition-colors hover:bg-emerald-100 hover:text-emerald-700"
+                        aria-label={`Remove ${pair.lecture.code} and ${pair.lab.code}`}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    <div className="flex items-center gap-2 pr-6">
+                      {pairAdded ? (
+                        <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600" />
+                      ) : (
+                        <Plus className="h-4 w-4 shrink-0 text-amber-600" />
+                      )}
+                      <div className="flex flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className={`text-sm font-semibold ${pairAdded ? "text-emerald-800" : "text-amber-900"}`}>{pair.lecture.code}</span>
+                        <span className={`text-sm ${pairAdded ? "text-emerald-700" : "text-amber-800"}`}>{pair.lecture.name}</span>
+                        <span className="text-[10px] text-muted-foreground">+</span>
+                        <span className={`text-sm font-semibold ${pairAdded ? "text-emerald-800" : "text-amber-900"}`}>{pair.lab.code}</span>
+                        <span className={`text-sm ${pairAdded ? "text-emerald-700" : "text-amber-800"}`}>{pair.lab.name}</span>
+                      </div>
+                      <Badge
+                        className={`shrink-0 text-[10px] font-bold ${
+                          pairAdded
+                            ? "border-emerald-300 bg-emerald-100 text-emerald-700"
+                            : "border-amber-300 bg-amber-100 text-amber-700"
+                        }`}
+                      >
+                        {pair.lecture.hrs + pair.lab.hrs} hrs
+                      </Badge>
+                    </div>
+                    <p className={`pl-6 text-[11px] leading-relaxed ${pairAdded ? "text-emerald-600" : "text-amber-700"}`}>
+                      {pairAdded ? "Added to your schedule (lecture + lab)" : pair.lecture.note}
+                    </p>
+                  </div>
+                )
+              })}
+            </>
+          )}
 
           {/* ======================================================== */}
           {/* CRITICAL courses - single select, prominent style         */}
@@ -558,6 +620,8 @@ function RequirementGroupCard({
             <div className="flex flex-col gap-2">
               {critical.map(c => {
                 const added = plannedCodes.has(c.code)
+                const degreePlanCourses = ["SEVI 30103", "ECON 31303", "ECON 47403", "FINN 30103"]
+                const isOnDegreePlan = degreePlanCourses.includes(c.code)
                 return (
                   <div
                     key={c.code}
@@ -567,9 +631,17 @@ function RequirementGroupCard({
                     className={`relative flex flex-col gap-1.5 rounded-lg border-2 px-4 py-3.5 text-left transition-all ${
                       added
                         ? "border-emerald-300 bg-emerald-50"
-                        : "cursor-pointer border-primary/20 bg-primary/[0.04] hover:border-primary/40 hover:bg-primary/[0.08]"
+                        : isOnDegreePlan
+                          ? "cursor-pointer border-amber-300 bg-amber-50 ring-1 ring-amber-200 hover:border-amber-400 hover:shadow-sm"
+                          : "cursor-pointer border-primary/20 bg-primary/[0.04] hover:border-primary/40 hover:bg-primary/[0.08]"
                     }`}
                   >
+                    {isOnDegreePlan && !added && (
+                      <div className="absolute -top-2.5 left-3 flex items-center gap-1 rounded-full bg-amber-500 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white shadow-sm">
+                        <Sparkles className="h-2.5 w-2.5" />
+                        On 8-Semester Plan
+                      </div>
+                    )}
                     {added && (
                       <button
                         onClick={(e) => { e.stopPropagation(); onRemove(c.code) }}
@@ -579,21 +651,23 @@ function RequirementGroupCard({
                         <X className="h-3.5 w-3.5" />
                       </button>
                     )}
-                    <div className="flex items-center gap-2 pr-6">
+                    <div className={`flex items-center gap-2 pr-6 ${isOnDegreePlan && !added ? "mt-1" : ""}`}>
                       {added ? (
                         <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600" />
                       ) : (
-                        <Sparkles className="h-4 w-4 shrink-0 text-primary" />
+                        <Sparkles className={`h-4 w-4 shrink-0 ${isOnDegreePlan ? "text-amber-600" : "text-primary"}`} />
                       )}
-                      <span className={`text-sm font-semibold ${added ? "text-emerald-800" : "text-foreground"}`}>{c.code}</span>
-                      <span className={`text-sm ${added ? "text-emerald-700" : "text-foreground"}`}>{c.name}</span>
+                      <span className={`text-sm font-semibold ${added ? "text-emerald-800" : isOnDegreePlan ? "text-amber-900" : "text-foreground"}`}>{c.code}</span>
+                      <span className={`text-sm ${added ? "text-emerald-700" : isOnDegreePlan ? "text-amber-800" : "text-foreground"}`}>{c.name}</span>
                       <Badge className={`ml-auto shrink-0 text-[10px] font-bold ${
                         added
                           ? "border-emerald-300 bg-emerald-100 text-emerald-700"
-                          : "border-primary/20 bg-primary/10 text-primary"
+                          : isOnDegreePlan
+                            ? "border-amber-300 bg-amber-100 text-amber-700"
+                            : "border-primary/20 bg-primary/10 text-primary"
                       }`}>{c.hrs} hrs</Badge>
                     </div>
-                    <p className={`pl-6 text-[11px] leading-relaxed ${added ? "text-emerald-600" : "text-muted-foreground"}`}>
+                    <p className={`pl-6 text-[11px] leading-relaxed ${added ? "text-emerald-600" : isOnDegreePlan ? "text-amber-700" : "text-muted-foreground"}`}>
                       {added ? "Added to your schedule" : c.note}
                     </p>
                   </div>
@@ -613,6 +687,8 @@ function RequirementGroupCard({
               <div className="flex flex-col gap-2">
                 {recommended.slice(0, 8).map(c => {
                   const added = plannedCodes.has(c.code)
+                  const degreePlanCourses = ["SEVI 30103", "ECON 31303", "ECON 47403", "FINN 30103"]
+                  const isOnDegreePlan = degreePlanCourses.includes(c.code)
                   return (
                     <div
                       key={c.code}
@@ -622,9 +698,17 @@ function RequirementGroupCard({
                       className={`relative flex flex-col gap-1 rounded-lg border px-3.5 py-3 text-left transition-all ${
                         added
                           ? "border-emerald-300 bg-emerald-50"
-                          : "cursor-pointer bg-card hover:border-primary/30 hover:shadow-sm"
+                          : isOnDegreePlan
+                            ? "cursor-pointer border-amber-300 bg-amber-50 ring-1 ring-amber-200 hover:border-amber-400 hover:shadow-sm"
+                            : "cursor-pointer bg-card hover:border-primary/30 hover:shadow-sm"
                       }`}
                     >
+                      {isOnDegreePlan && !added && (
+                        <div className="absolute -top-2 left-3 flex items-center gap-1 rounded-full bg-amber-500 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white shadow-sm">
+                          <Sparkles className="h-2.5 w-2.5" />
+                          On 8-Semester Plan
+                        </div>
+                      )}
                       {added && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onRemove(c.code) }}
@@ -634,17 +718,17 @@ function RequirementGroupCard({
                           <X className="h-3 w-3" />
                         </button>
                       )}
-                      <div className="flex items-center gap-2 pr-6">
+                      <div className={`flex items-center gap-2 pr-6 ${isOnDegreePlan && !added ? "mt-1" : ""}`}>
                         {added ? (
                           <CheckCircle className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
                         ) : (
-                          <Plus className="h-3.5 w-3.5 shrink-0 text-primary" />
+                          <Plus className={`h-3.5 w-3.5 shrink-0 ${isOnDegreePlan ? "text-amber-600" : "text-primary"}`} />
                         )}
-                        <span className={`text-xs font-semibold ${added ? "text-emerald-800" : "text-foreground"}`}>{c.code}</span>
-                        <span className={`text-xs ${added ? "text-emerald-700" : "text-foreground"}`}>{c.name}</span>
-                        <span className={`ml-auto text-[10px] font-medium ${added ? "text-emerald-600" : "text-muted-foreground"}`}>{c.hrs} hrs</span>
+                        <span className={`text-xs font-semibold ${added ? "text-emerald-800" : isOnDegreePlan ? "text-amber-900" : "text-foreground"}`}>{c.code}</span>
+                        <span className={`text-xs ${added ? "text-emerald-700" : isOnDegreePlan ? "text-amber-800" : "text-foreground"}`}>{c.name}</span>
+                        <span className={`ml-auto text-[10px] font-medium ${added ? "text-emerald-600" : isOnDegreePlan ? "text-amber-700" : "text-muted-foreground"}`}>{c.hrs} hrs</span>
                       </div>
-                      <p className={`pl-[1.375rem] text-[10px] leading-relaxed ${added ? "text-emerald-600" : "text-muted-foreground"}`}>
+                      <p className={`pl-[1.375rem] text-[10px] leading-relaxed ${added ? "text-emerald-600" : isOnDegreePlan ? "text-amber-700" : "text-muted-foreground"}`}>
                         {added ? "Added to your schedule" : c.note}
                       </p>
                     </div>

@@ -11,10 +11,19 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Check } from "lucide-react"
 import type { Course } from "@/lib/validation"
 
+// Type for selected sections (course code -> section data)
+interface SelectedSection {
+  id: string
+  courseCode: string
+  section: string
+}
+
 export default function Home() {
   const [screen, setScreen] = useState(1)
   const [loading, setLoading] = useState(false)
   const [planned, setPlanned] = useState<Course[]>([])
+  // Persist schedule selections across screen changes
+  const [selectedSections, setSelectedSections] = useState<Record<string, SelectedSection>>({})
 
   const goTo = (s: number) => {
     setScreen(s)
@@ -87,6 +96,8 @@ export default function Home() {
                 planned={planned}
                 setPlanned={setPlanned}
                 onRunCheck={() => goTo(4)}
+                selectedSections={selectedSections}
+                setSelectedSections={setSelectedSections}
               />
             )}
             {screen === 4 && (
