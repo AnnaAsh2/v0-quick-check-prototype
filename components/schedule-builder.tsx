@@ -65,6 +65,7 @@ function normalizeDays(days: string): string {
 // Build sections from imported data
 const allSections: Section[] = SECTIONS.map(s => {
   const courseInfo = COURSES.find(c => c.id === s.course)
+  const hrs = courseInfo?.credits || 3
   return {
     id: `${s.course}-${s.section}`,
     courseCode: s.course,
@@ -76,9 +77,12 @@ const allSections: Section[] = SECTIONS.map(s => {
     instructor: s.instructor,
     cap: s.cap,
     room: s.location,
-    hrs: courseInfo?.credits || 3
+    hrs
   }
 })
+
+// Debug: log first few sections to verify hrs
+console.log("[v0] Sample allSections:", allSections.slice(0, 5).map(s => ({ id: s.id, hrs: s.hrs })))
 
 /* ------------------------------------------------------------------ */
 /*  Helper Functions                                                    */
@@ -188,6 +192,7 @@ export function ScheduleBuilder({ planned, onRemove, onRemoveCourse, selectedSec
     const result: Record<string, Section> = {}
     Object.entries(externalSelectedSections).forEach(([courseCode, data]) => {
       const section = allSections.find(s => s.id === data.id)
+      console.log("[v0] Converting section:", data.id, "found:", !!section, "hrs:", section?.hrs)
       if (section) {
         result[courseCode] = section
       }
@@ -517,7 +522,11 @@ export function ScheduleBuilder({ planned, onRemove, onRemoveCourse, selectedSec
   }
 
   // Calculate total hours and conflicts
-  const totalHrs = Object.values(selectedSections).reduce((sum, s) => sum + s.hrs, 0)
+  const totalHrs = Object.values(selectedSections).reduce((sum, s) => {
+    console.log("[v0] Section hrs:", s.courseCode, s.hrs)
+    return sum + (s.hrs || 0)
+  }, 0)
+  console.log("[v0] Total hours calculated:", totalHrs, "from", Object.keys(selectedSections).length, "sections")
   const conflictCount = getConflicts.length
 
   // Calendar grid data
